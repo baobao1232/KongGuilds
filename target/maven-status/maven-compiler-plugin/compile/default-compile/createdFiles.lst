@@ -1,0 +1,17 @@
+king\kongguilds\Guild$MemberInfo.class
+king\kongguilds\ItemStackSerializer.class
+king\kongguilds\GuildListener.class
+king\kongguilds\MessageManager.class
+king\kongguilds\TaskManager.class
+king\kongguilds\GuildCommands.class
+king\kongguilds\GuildMemberEditGUI.class
+king\kongguilds\GuildManager.class
+king\kongguilds\Guild$RankType.class
+king\kongguilds\TimedInvite.class
+king\kongguilds\Member.class
+king\kongguilds\GuildDataCache.class
+king\kongguilds\GuildConfig.class
+king\kongguilds\Guild.class
+king\kongguilds\GuildGUI.class
+king\kongguilds\Main.class
+king\kongguilds\Rank.class

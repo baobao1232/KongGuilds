@@ -1,0 +1,9 @@
+name: KongGuilds
+version: 1.0.0
+author: King
+main: king.kongguilds.Main
+api-version: 1.20
+commands:
+  guilds:
+    description: Quản lý guilds
+    usage: /<command>
