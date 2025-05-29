@@ -1,5 +1,6 @@
-package king.kongguilds;
+package king.kongguilds.Gui;
 
+import king.kongguilds.Model.Guild;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -12,7 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 public class GuildGUI {
 

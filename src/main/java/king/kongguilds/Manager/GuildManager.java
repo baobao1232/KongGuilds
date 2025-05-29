@@ -1,4 +1,4 @@
-package king.kongguilds;
+package king.kongguilds.Manager;
 
 import com.fastasyncworldedit.core.FaweAPI;
 import com.google.gson.Gson;
@@ -13,9 +13,10 @@ import com.sk89q.worldedit.function.operation.Operation;
 import com.sk89q.worldedit.function.operation.Operations;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.session.ClipboardHolder;
-import eu.decentsoftware.holograms.api.DHAPI;
 import eu.decentsoftware.holograms.api.holograms.Hologram;
-import king.kongguilds.BASE.BaseData;
+import king.kongguilds.Base.BaseData;
+import king.kongguilds.Model.Guild;
+import king.kongguilds.Model.TimedInvite;
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
@@ -28,8 +29,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.*;
 import java.util.*;
-
-import static king.kongguilds.BASE.BaseData.loadBases;
 
 public class GuildManager {
     private final JavaPlugin plugin;

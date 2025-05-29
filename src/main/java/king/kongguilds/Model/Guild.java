@@ -1,5 +1,6 @@
-package king.kongguilds;
+package king.kongguilds.Model;
 
+import king.kongguilds.Config.GuildConfig;
 import org.bukkit.Bukkit;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -9,7 +10,6 @@ import org.bukkit.util.io.BukkitObjectOutputStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.*;
 
 public class Guild {

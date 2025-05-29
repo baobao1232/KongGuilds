@@ -1,4 +1,4 @@
-package king.kongguilds;
+package king.kongguilds.Manager;
 
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.YamlConfiguration;

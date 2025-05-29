@@ -1,8 +1,14 @@
 package king.kongguilds;
 
-import eu.decentsoftware.holograms.api.holograms.HologramManager;
-import king.kongguilds.BASE.BaseData;
-import king.kongguilds.BASE.BaseHologramManager;
+import king.kongguilds.Base.BaseData;
+import king.kongguilds.Base.BaseHologramManager;
+import king.kongguilds.Command.GuildCommands;
+import king.kongguilds.Config.GuildConfig;
+import king.kongguilds.Listener.GuildListener;
+import king.kongguilds.Manager.GuildManager;
+import king.kongguilds.Manager.MessageManager;
+import king.kongguilds.Manager.TaskManager;
+import king.kongguilds.Model.Guild;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;

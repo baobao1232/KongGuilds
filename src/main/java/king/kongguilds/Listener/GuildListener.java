@@ -1,5 +1,9 @@
-package king.kongguilds;
+package king.kongguilds.Listener;
 
+import king.kongguilds.Gui.GuildMemberEditGUI;
+import king.kongguilds.Model.Guild;
+import king.kongguilds.Manager.GuildManager;
+import king.kongguilds.Manager.MessageManager;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;

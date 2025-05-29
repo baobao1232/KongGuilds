@@ -1,4 +1,4 @@
-package king.kongguilds;
+package king.kongguilds.Model;
 
 public class Rank {
     private int level;

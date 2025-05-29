@@ -1,5 +1,6 @@
-package king.kongguilds;
+package king.kongguilds.Gui;
 
+import king.kongguilds.Model.Guild;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;

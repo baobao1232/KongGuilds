@@ -1,4 +1,4 @@
-package king.kongguilds;
+package king.kongguilds.Config;
 
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.java.JavaPlugin;

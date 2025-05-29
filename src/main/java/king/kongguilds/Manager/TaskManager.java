@@ -1,5 +1,6 @@
-package king.kongguilds;
+package king.kongguilds.Manager;
 
+import king.kongguilds.Model.TimedInvite;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Iterator;

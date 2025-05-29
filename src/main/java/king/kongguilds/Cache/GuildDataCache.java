@@ -1,4 +1,6 @@
-package king.kongguilds;
+package king.kongguilds.Cache;
+
+import king.kongguilds.Model.Guild;
 
 import java.util.HashMap;
 import java.util.Map;
