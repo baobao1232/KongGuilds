@@ -6,6 +6,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryView;
 
@@ -14,9 +15,11 @@ import java.util.*;
 public class GuildListener implements Listener {
 
     private final GuildManager guildManager;
+    private final MessageManager messageManager;
 
-    public GuildListener(GuildManager guildManager) {
+    public GuildListener(GuildManager guildManager, MessageManager messManager) {
         this.guildManager = guildManager;
+        this.messageManager = messManager;
     }
 
     // ---------- KHO CHUNG ----------
@@ -64,37 +67,53 @@ public class GuildListener implements Listener {
         InventoryView view = event.getView();
         String title = ChatColor.stripColor(view.getTitle());
 
-        if (title.startsWith("Guild: ")) {
-            event.setCancelled(true);
+        if (!title.startsWith("Guild: ")) return;
 
-            Guild guild = guildManager.getPlayerGuild(player);
-            if (guild == null) return;
+        event.setCancelled(true);
 
-            List<Map.Entry<UUID, Guild.MemberInfo>> sortedMembers = guild.getSortedMembers();
-            int slot = event.getRawSlot();
-            if (slot < 0 || slot >= sortedMembers.size()) return;
+        Guild guild = guildManager.getPlayerGuild(player);
+        if (guild == null) return;
 
-            UUID clickedMemberId = sortedMembers.get(slot).getKey();
-            Guild.MemberInfo clickedMember = sortedMembers.get(slot).getValue();
+        List<Map.Entry<UUID, Guild.MemberInfo>> sortedMembers = guild.getSortedMembers();
+        int slot = event.getRawSlot();
 
-            UUID playerId = player.getUniqueId();
-            boolean isLeader = guild.getLeader().equals(playerId);
-            boolean isCoLeader = guild.getMembers().containsKey(playerId)
-                    && guild.getMembers().get(playerId).getRankName().equalsIgnoreCase("CoLeader");
+        if (slot < 0 || slot >= sortedMembers.size()) return;
 
-            if (isLeader) {
-                GuildMemberEditGUI.openEditGUI(player, guild, clickedMemberId);
-            } else if (isCoLeader) {
-                String targetRank = clickedMember.getRankName();
-                if (!targetRank.equalsIgnoreCase("Leader") && !targetRank.equalsIgnoreCase("CoLeader")) {
-                    GuildMemberEditGUI.openEditGUI(player, guild, clickedMemberId);
-                } else {
-                    player.sendMessage(ChatColor.RED + "Bạn không có quyền chỉnh sửa thành viên này.");
-                }
-            } else {
-                player.sendMessage(ChatColor.RED + "Bạn không có quyền chỉnh sửa thành viên.");
-            }
+        UUID clickedMemberId = sortedMembers.get(slot).getKey();
+        Guild.MemberInfo clickedMember = sortedMembers.get(slot).getValue();
+
+        UUID playerId = player.getUniqueId();
+
+        // ❌ Không cho click vào chính mình
+        if (clickedMemberId.equals(playerId)) {
+            player.sendMessage(messageManager.getMessage("member", "not_edit_yourself"));
+            return;
         }
+
+        Guild.MemberInfo selfInfo = guild.getMembers().get(playerId);
+        if (selfInfo == null) return;
+
+        Guild.RankType selfRank = selfInfo.getRank();
+        Guild.RankType targetRank = clickedMember.getRank();
+
+        // 🎖️ Leader có toàn quyền chỉnh sửa
+        if (selfRank == Guild.RankType.LEADER) {
+            GuildMemberEditGUI.openEditGUI(player, guild, clickedMemberId);
+            return;
+        }
+
+        // 🛡️ Officer chỉ có thể chỉnh sửa Member
+        if (selfRank == Guild.RankType.OFFICER) {
+            if (targetRank == Guild.RankType.MEMBER) {
+                GuildMemberEditGUI.openEditGUI(player, guild, clickedMemberId);
+            } else {
+                player.sendMessage(messageManager.getMessage("member", "cannot_edit_higher_rank"));
+            }
+            return;
+        }
+
+        // 🙅 Member không có quyền
+        player.sendMessage(ChatColor.RED + "Bạn không có quyền chỉnh sửa thành viên.");
     }
 
     // ---------- XỬ LÝ CLICK TRONG GUI CHỈNH THÀNH VIÊN ----------
@@ -132,9 +151,27 @@ public class GuildListener implements Listener {
             // TODO: Giảm rank ở đây
         } else if (slot == 22) {
             String name = guild.getMembers().get(targetId).getName();
-            guild.kickMember(targetId);
-            player.sendMessage("§cĐã kick " + name + " khỏi guild.");
+            String guildName = guild.getName();
+
+            guildManager.kickMember(player, guildName, targetId); // dùng hàm mới có kiểm tra quyền
+
             player.closeInventory();
         }
     }
+
+    @EventHandler
+    public void onPlayerChat(AsyncPlayerChatEvent event) {
+        Player player = event.getPlayer();
+        UUID uuid = player.getUniqueId();
+
+        if (!guildManager.isInGuildChatMode(uuid)) return;
+
+        Guild guild = guildManager.getPlayerGuild(player);
+        if (guild == null) return;
+
+        event.setCancelled(true); // huỷ chat bình thường
+        String message = event.getMessage();
+        guildManager.sendGuildMessage(guild, player, message);
+    }
+
 }

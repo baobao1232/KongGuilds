@@ -1,17 +1,35 @@
 package king.kongguilds;
 
+import com.fastasyncworldedit.core.FaweAPI;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.sk89q.worldedit.EditSession;
+import com.sk89q.worldedit.WorldEdit;
+import com.sk89q.worldedit.extent.clipboard.Clipboard;
+import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat;
+import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats;
+import com.sk89q.worldedit.extent.clipboard.io.ClipboardReader;
+import com.sk89q.worldedit.function.operation.Operation;
+import com.sk89q.worldedit.function.operation.Operations;
+import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.session.ClipboardHolder;
+import eu.decentsoftware.holograms.api.DHAPI;
+import eu.decentsoftware.holograms.api.holograms.Hologram;
+import king.kongguilds.BASE.BaseData;
+import me.clip.placeholderapi.PlaceholderAPI;
+import net.md_5.bungee.api.ChatColor;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.util.*;
+
+import static king.kongguilds.BASE.BaseData.loadBases;
 
 public class GuildManager {
     private final JavaPlugin plugin;
@@ -20,9 +38,13 @@ public class GuildManager {
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
     private final Map<UUID, TimedInvite> pendingInvites = new HashMap<>();
     private final Map<String, UUID> guildStorageLock = new HashMap<>();
+    private final MessageManager messageManager;
+    private final Set<UUID> guildChatMode = new HashSet<>();
+    private static final Map<String, Hologram> hologramMap = new HashMap<>();
 
-    public GuildManager(JavaPlugin plugin) {
+    public GuildManager(JavaPlugin plugin, MessageManager messageManager) {
         this.plugin = plugin; // <- thêm dòng này
+        this.messageManager = messageManager;
         this.guildFolder = new File(plugin.getDataFolder(), "Guilds");
         createGuildFolder();
         loadGuilds();
@@ -103,13 +125,50 @@ public class GuildManager {
         }
     }
 
-
-    public void kickMember(String guildName, UUID memberId) {
+    public boolean kickMemberAsAdmin(String guildName, UUID targetId) {
         Guild guild = getGuild(guildName);
-        if (guild != null && guild.hasMember(memberId)) {
-            guild.kickMember(memberId);
-        }
+        if (guild == null || !guild.hasMember(targetId)) return false;
+
+        guild.kickMember(targetId);
+        return true;
     }
+
+
+    public void kickMember(Player kicker, String guildName, UUID targetId) {
+        Guild guild = getGuild(guildName);
+        if (guild == null || !guild.hasMember(targetId)) return;
+
+        UUID kickerId = kicker.getUniqueId();
+        if (!guild.hasMember(kickerId)) {
+            kicker.sendMessage("§cBạn không phải thành viên của guild này.");
+            return;
+        }
+
+        if (kickerId.equals(targetId)) {
+            kicker.sendMessage("§cBạn không thể kick chính mình!");
+            return;
+        }
+
+        Guild.MemberInfo kickerInfo = guild.getMembers().get(kickerId);
+        Guild.MemberInfo targetInfo = guild.getMembers().get(targetId);
+
+        Guild.RankType kickerRank = kickerInfo.getRank();
+        Guild.RankType targetRank = targetInfo.getRank();
+
+        if (kickerRank != Guild.RankType.LEADER && kickerRank != Guild.RankType.OFFICER) {
+            kicker.sendMessage("§cChỉ Leader hoặc Officer mới có quyền kick!");
+            return;
+        }
+
+        if (targetRank == Guild.RankType.LEADER) {
+            kicker.sendMessage("§cKhông thể kick Leader!");
+            return;
+        }
+
+        guild.kickMember(targetId);
+        kicker.sendMessage("§aĐã kick thành viên " + targetInfo.getName());
+    }
+
 
     public void inviteMember(UUID playerId, String guildName) {
         // Thời gian timeout là 60 giây (60 * 1000 ms)
@@ -259,5 +318,139 @@ public class GuildManager {
         }
         return points;
     }
+
+    public void toggleGuildChat(Player player) {
+        UUID uuid = player.getUniqueId();
+        if (guildChatMode.contains(uuid)) {
+            guildChatMode.remove(uuid);
+            player.sendMessage(ChatColor.YELLOW + "Đã tắt chế độ chat guild.");
+        } else {
+            guildChatMode.add(uuid);
+            player.sendMessage(ChatColor.GREEN + "Đã bật chế độ chat guild.");
+        }
+    }
+
+    public boolean isInGuildChatMode(UUID uuid) {
+        return guildChatMode.contains(uuid);
+    }
+
+    public void sendGuildMessage(Guild guild, Player sender, String message) {
+        Guild.MemberInfo senderInfo = guild.getMembers().get(sender.getUniqueId());
+        String rankName = senderInfo != null ? senderInfo.getRankName() : "Member";
+
+        String format = messageManager.getMessage("member", "guild_chat_format", Map.of(
+                "player", sender.getName(),
+                "rank", rankName,
+                "message", message
+        ));
+
+        for (UUID memberId : guild.getMembers().keySet()) {
+            Player member = Bukkit.getPlayer(memberId);
+            if (member != null && member.isOnline()) {
+                // Xử lý PlaceholderAPI cho từng người nhận
+                String parsedMessage = PlaceholderAPI.setPlaceholders(member, format);
+                member.sendMessage(parsedMessage);
+            }
+        }
+    }
+
+    public boolean isInGuildChat(UUID playerId) {
+        return guildChatMode.contains(playerId);
+    }
+
+    public static Location getCenter(Location pos1, Location pos2) {
+        if (!pos1.getWorld().equals(pos2.getWorld())) return null;
+        double x = (pos1.getX() + pos2.getX()) / 2.0;
+        double y = (pos1.getY() + pos2.getY()) / 2.0 + 1.5;  // nâng cao lên một chút
+        double z = (pos1.getZ() + pos2.getZ()) / 2.0;
+        return new Location(pos1.getWorld(), x, y, z);
+    }
+
+    public static boolean isInside(Location point, Location pos1, Location pos2) {
+        if (!point.getWorld().getName().equals(pos1.getWorld().getName()) ||
+                !pos1.getWorld().getName().equals(pos2.getWorld().getName())) {
+            return false;
+        }
+
+        double xMin = Math.min(pos1.getX(), pos2.getX());
+        double xMax = Math.max(pos1.getX(), pos2.getX());
+        double zMin = Math.min(pos1.getZ(), pos2.getZ());
+        double zMax = Math.max(pos1.getZ(), pos2.getZ());
+
+        return (point.getX() >= xMin && point.getX() <= xMax) &&
+                (point.getZ() >= zMin && point.getZ() <= zMax);
+    }
+
+    public static BlockVector3 pasteSchematic(JavaPlugin plugin, Location centerLocation, String fileName) {
+        try {
+            File schematicFile = new File(plugin.getDataFolder(), "schem/" + fileName);
+
+            if (!schematicFile.exists() || !schematicFile.isFile()) {
+                throw new IllegalArgumentException("Schematic file không tồn tại: " + schematicFile.getPath());
+            }
+
+            World world = centerLocation.getWorld();
+            if (world == null) {
+                throw new IllegalArgumentException("World không hợp lệ");
+            }
+
+            com.sk89q.worldedit.world.World faweWorld = FaweAPI.getWorld(world.getName());
+
+            Clipboard clipboard;
+            ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
+            if (format == null) {
+                throw new IllegalArgumentException("Không thể xác định định dạng schematic file");
+            }
+            try (ClipboardReader reader = format.getReader(new FileInputStream(schematicFile))) {
+                clipboard = reader.read();
+            }
+
+            int width = clipboard.getRegion().getWidth();
+            int height = clipboard.getRegion().getHeight();
+            int length = clipboard.getRegion().getLength();
+
+            // Tính vị trí bắt đầu paste: lấy center trừ nửa kích thước schematic
+            BlockVector3 pasteLocation = BlockVector3.at(
+                    centerLocation.getBlockX() - width / 2,
+                    centerLocation.getBlockY(),
+                    centerLocation.getBlockZ() - length / 2
+            );
+
+            try (EditSession editSession = WorldEdit.getInstance().newEditSession(faweWorld)) {
+                ClipboardHolder clipboardHolder = new ClipboardHolder(clipboard);
+                Operation operation = clipboardHolder
+                        .createPaste(editSession)
+                        .to(pasteLocation)
+                        .ignoreAirBlocks(false)
+                        .build();
+
+                Operations.complete(operation);
+                editSession.flushQueue();
+            }
+
+            return BlockVector3.at(width, height, length);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Lỗi khi xử lý schematic file: " + e.getMessage(), e);
+        }
+    }
+
+
+    public static boolean saveBaseData(Map<String, BaseData.BaseClaim> allBases, Player player) {
+        try (Writer writer = new FileWriter(BaseData.getBaseFile())) {
+            new GsonBuilder()
+                    .registerTypeAdapter(Location.class, new BaseData.LocationAdapter())
+                    .setPrettyPrinting()
+                    .create()
+                    .toJson(allBases, writer);
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            player.sendMessage("§cĐã xảy ra lỗi khi lưu base.");
+            return false;
+        }
+    }
+
 
 }
