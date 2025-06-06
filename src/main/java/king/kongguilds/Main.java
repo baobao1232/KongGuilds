@@ -13,6 +13,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 
 public class Main extends JavaPlugin {
     private static Main instance;
@@ -21,42 +22,70 @@ public class Main extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        BaseData.setBaseFile(this.getDataFolder());
         instance = this;
-        getDataFolder().mkdirs();
-        saveDefaultConfig();
+        createPluginFolder();
+        loadPluginConfig();
+        if (!loadMessages()) return;
 
-        // Load config trước
-        GuildConfig.load(this);
-
-        // Khởi tạo MessageManager trước
-        messageManager = new MessageManager();
-        try {
-            messageManager.load(new File(getDataFolder(), "messages.yml"));
-        } catch (IOException e) {
-            getLogger().severe("Không thể load messages.yml!");
-            e.printStackTrace();
-            // Nếu messages.yml lỗi, ta nên dừng plugin
-            getServer().getPluginManager().disablePlugin(this);
-            return;
-        }
         BaseHologramManager.cleanupOrphanHolograms();
 
-        // Sau đó mới truyền vào GuildManager
         guildManager = new GuildManager(this, messageManager);
 
-        this.getCommand("guilds").setExecutor(new GuildCommands(this, guildManager, messageManager));
-        getServer().getPluginManager().registerEvents(new GuildListener(guildManager, messageManager), this);
-        new TaskManager().startInviteCleanupTask(this, guildManager);
-    }
+        registerCommands();
+        registerListeners();
+        startTasks();
 
+        BaseHologramManager.loadAllBaseHolograms();
+        for (Method m : this.getClass().getDeclaredMethods()) {
+            getLogger().info("[KongGuilds] Method found: " + m.getName());
+        }
+        getLogger().info("KongGuilds đã bật thành công!");
+    }
 
     @Override
     public void onDisable() {
-        for (Guild guild : guildManager.getAllGuilds()) {
-            guildManager.saveGuild(guild.getName());
+        if (guildManager != null) {
+            for (Guild guild : guildManager.getAllGuilds()) {
+                guildManager.saveGuild(guild.getName());
+            }
         }
         instance = null;
+        getLogger().info("KongGuilds đã tắt.");
+    }
+
+    private void createPluginFolder() {
+        BaseData.setBaseFile(this.getDataFolder());
+        getDataFolder().mkdirs();
+        saveDefaultConfig();
+    }
+
+    private void loadPluginConfig() {
+        GuildConfig.load(this);
+    }
+
+    private boolean loadMessages() {
+        messageManager = new MessageManager();
+        try {
+            messageManager.load(new File(getDataFolder(), "messages.yml"));
+            return true;
+        } catch (IOException e) {
+            getLogger().severe("Không thể load messages.yml! Plugin sẽ bị vô hiệu.");
+            e.printStackTrace();
+            getServer().getPluginManager().disablePlugin(this);
+            return false;
+        }
+    }
+
+    private void registerCommands() {
+        getCommand("guilds").setExecutor(new GuildCommands(this, guildManager, messageManager));
+    }
+
+    private void registerListeners() {
+        getServer().getPluginManager().registerEvents(new GuildListener(this, guildManager, messageManager), this);
+    }
+
+    private void startTasks() {
+        new TaskManager().startInviteCleanupTask(this, guildManager);
     }
 
     public static Main getInstance() {
@@ -64,6 +93,6 @@ public class Main extends JavaPlugin {
     }
 
     public GuildManager getGuildManager() {
-        return guildManager;
+        return this.guildManager;
     }
 }

@@ -12,15 +12,20 @@ import com.sk89q.worldedit.extent.clipboard.io.ClipboardReader;
 import com.sk89q.worldedit.function.operation.Operation;
 import com.sk89q.worldedit.function.operation.Operations;
 import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.session.ClipboardHolder;
+import com.sk89q.worldedit.world.block.BaseBlock;
 import eu.decentsoftware.holograms.api.holograms.Hologram;
 import king.kongguilds.Base.BaseData;
 import king.kongguilds.Model.Guild;
+import king.kongguilds.Model.Member;
 import king.kongguilds.Model.TimedInvite;
+import king.kongguilds.WorldGuard.BaseRegionManager;
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -40,6 +45,7 @@ public class GuildManager {
     private final MessageManager messageManager;
     private final Set<UUID> guildChatMode = new HashSet<>();
     private static final Map<String, Hologram> hologramMap = new HashMap<>();
+    private final Map<String, List<UUID>> itemRequests = new HashMap<>();
 
     public GuildManager(JavaPlugin plugin, MessageManager messageManager) {
         this.plugin = plugin; // <- thêm dòng này
@@ -81,16 +87,48 @@ public class GuildManager {
     }
 
     public void loadGuilds() {
+        // Tạo Gson với custom UUID adapter
+        Gson gson = new GsonBuilder()
+                .registerTypeAdapter(UUID.class, new UUIDAdapter())
+                .create();
+
         File[] files = guildFolder.listFiles((dir, name) -> name.endsWith(".json"));
         if (files != null) {
             for (File file : files) {
                 try (FileReader reader = new FileReader(file)) {
                     Guild guild = gson.fromJson(reader, Guild.class);
+
+                    // Kiểm tra và sửa UUID null
+                    validateAndFixGuildUUIDs(guild);
+
                     guild.setPlugin(plugin); // tạo inventory kho chung
                     guild.loadSharedStorage(); // load kho chung từ base64
                     guilds.put(guild.getName(), guild);
+
+                    Bukkit.getLogger().info("Loaded guild: " + guild.getName() +
+                            " with leader UUID: " + guild.getLeader());
                 } catch (IOException e) {
+                    Bukkit.getLogger().warning("Error loading guild from file: " + file.getName());
                     e.printStackTrace();
+                }
+            }
+        }
+    }
+    private void validateAndFixGuildUUIDs(Guild guild) {
+        // Fix leader UUID nếu null
+        if (guild.getLeader() == null) {
+            Bukkit.getLogger().warning("Guild " + guild.getName() + " has null leader UUID!");
+            // Có thể tìm UUID từ tên leader nếu có
+            // guild.setLeader(Bukkit.getOfflinePlayer(leaderName).getUniqueId());
+        }
+
+        // Fix member UUIDs nếu null
+        if (guild.getMembers() != null) {
+            for (Member member : guild.getMembers().values()) {
+                if (member != null && member.getUUID() == null && member.getName() != null) {
+                    UUID fixedUUID = Bukkit.getOfflinePlayer(member.getName()).getUniqueId();
+                    member.setUUID(fixedUUID);
+                    Bukkit.getLogger().info("Fixed UUID for member: " + member.getName() + " -> " + fixedUUID);
                 }
             }
         }
@@ -108,7 +146,6 @@ public class GuildManager {
         }
     }
 
-
     public void addMember(String guildName, String playerName, UUID memberId, String rankName, String memberType, int points) {
         Guild guild = getGuild(guildName);
         if (guild != null && !guild.hasMember(memberId)) {
@@ -121,6 +158,16 @@ public class GuildManager {
                 rank = Guild.RankType.MEMBER;
             }
             guild.addMember(memberId, playerName, rank, memberType, points);
+            if (guild.getBaseID() != null && !guild.getBaseID().isEmpty()) {
+                String baseID = guild.getBaseID();
+                World world = BaseData.getWorldByBaseID(guild.getBaseID());
+                if (world != null) {
+                    BaseRegionManager.addMemberToRegion(baseID, playerName, world);
+                } else {
+                    // Xử lý khi không tìm thấy world, ví dụ log hoặc bỏ qua
+                    Bukkit.getLogger().info("Không tìm thấy world cho baseID: " + baseID);
+                }
+            }
         }
     }
 
@@ -128,9 +175,18 @@ public class GuildManager {
         Guild guild = getGuild(guildName);
         if (guild == null || !guild.hasMember(targetId)) return false;
 
+        Member member = guild.getMembers().get(targetId);
+        World world = BaseData.getWorldByBaseID(guild.getBaseID());
+        if (world != null) {
+            BaseRegionManager.removeMemberFromRegion(guild.getBaseID(), member.getName(), world);
+        } else {
+            Bukkit.getLogger().info("Không tìm thấy world cho baseID: " + guild.getBaseID());
+        }
+
         guild.kickMember(targetId);
         return true;
     }
+
 
 
     public void kickMember(Player kicker, String guildName, UUID targetId) {
@@ -148,11 +204,17 @@ public class GuildManager {
             return;
         }
 
-        Guild.MemberInfo kickerInfo = guild.getMembers().get(kickerId);
-        Guild.MemberInfo targetInfo = guild.getMembers().get(targetId);
+        Member kickerInfo = guild.getMembers().get(kickerId);
+        Member targetInfo = guild.getMembers().get(targetId);
 
-        Guild.RankType kickerRank = kickerInfo.getRank();
-        Guild.RankType targetRank = targetInfo.getRank();
+        // Giờ gọi getRank() của Member trả về String rank chứ không phải Guild.RankType
+        String kickerRankString = kickerInfo.getRank();
+        String targetRankString = targetInfo.getRank();
+
+        // Nếu muốn so sánh với enum RankType, cần chuyển String sang enum
+        Guild.RankType kickerRank = Guild.RankType.valueOf(kickerRankString);
+        Guild.RankType targetRank = Guild.RankType.valueOf(targetRankString);
+
 
         if (kickerRank != Guild.RankType.LEADER && kickerRank != Guild.RankType.OFFICER) {
             kicker.sendMessage("§cChỉ Leader hoặc Officer mới có quyền kick!");
@@ -162,6 +224,15 @@ public class GuildManager {
         if (targetRank == Guild.RankType.LEADER) {
             kicker.sendMessage("§cKhông thể kick Leader!");
             return;
+        }
+        if (guild.getBaseID() != null && !guild.getBaseID().isEmpty()) {
+            String baseID = guild.getBaseID();
+            World world = BaseData.getWorldByBaseID(baseID);
+            if (world != null) {
+                BaseRegionManager.removeMemberFromRegion(baseID, targetInfo.getName(), world);
+            } else {
+                Bukkit.getLogger().info("Không tìm thấy world cho baseID: " + baseID);
+            }
         }
 
         guild.kickMember(targetId);
@@ -230,19 +301,30 @@ public class GuildManager {
         Guild guild = getPlayerGuild(player);
         if (guild == null) return false;
 
-        Guild.MemberInfo info = guild.getMembers().get(player.getUniqueId());
-        return info != null && info.getMemberType().equalsIgnoreCase("Co-Leader");
+        Member info = guild.getMembers().get(player.getUniqueId());
+        // Ở đây, rank là String lưu trong field 'rank', nếu bạn dùng "Co-Leader" làm rank
+        return info != null && info.getRank().equalsIgnoreCase("Co-Leader");
     }
 
     public void updateMemberPoints(String guildName, UUID memberId, int points) {
         Guild guild = getGuild(guildName);
         if (guild != null && guild.hasMember(memberId)) {
-            Guild.MemberInfo info = guild.getMembers().get(memberId);
-            guild.getMembers().put(memberId, new Guild.MemberInfo(
-                    info.getName(), info.getRankName(), info.getMemberType(), points
-            ));
+            Member info = guild.getMembers().get(memberId);
+            // Tạo Member mới giữ nguyên uuid, name, joinDate, rank, cập nhật điểm (score)
+            int newScore = info.getScore() + points;
+
+            Member updatedMember = new Member(
+                    info.getUUID(),
+                    info.getName(),
+                    info.getJoinDate(),
+                    info.getRank(),
+                    newScore
+            );
+
+            guild.getMembers().put(memberId, updatedMember);
         }
     }
+
 
     public void addExpToGuild(Player player, int amount) {
         Guild guild = getPlayerGuild(player);
@@ -258,64 +340,6 @@ public class GuildManager {
 
     public void lockGuildStorage(String guildName, UUID playerId) {
         guildStorageLock.put(guildName, playerId);
-    }
-
-    public void unlockGuildStorage(String guildName) {
-        guildStorageLock.remove(guildName);
-    }
-
-    public boolean openSharedStorage(Player player) {
-        Guild guild = getPlayerGuild(player);
-        if (guild == null) {
-            player.sendMessage("§cBạn không thuộc guild nào!");
-            return false;
-        }
-
-        String guildName = guild.getName();
-
-        if (guildStorageLock.containsKey(guildName)) {
-            player.sendMessage("§cKho chung đang được sử dụng, vui lòng chờ.");
-            return false;
-        }
-
-        // Mở kho, khóa kho cho player đó
-        guildStorageLock.put(guildName, player.getUniqueId());
-
-        Inventory inv = guild.getSharedStorageInventory();
-        player.openInventory(inv);
-        return true;
-    }
-
-    public void handleSharedStorageClose(Player player) {
-        Guild guild = getPlayerGuild(player);
-        if (guild == null) return;
-
-        Inventory inv = guild.getSharedStorageInventory();
-
-        // Tính điểm dựa trên item bỏ vào
-        int pointsGained = 0;
-        for (ItemStack item : inv.getContents()) {
-            if (item == null) continue;
-            pointsGained += item.getAmount();
-        }
-
-        // Cập nhật điểm cho member
-        updateMemberPoints(guild.getName(), player.getUniqueId(), pointsGained);
-
-        // Lưu kho chung lại
-        guild.saveSharedStorage();
-
-        // Mở khóa kho
-        unlockGuildStorage(guild.getName());
-    }
-
-    private int calculatePointsFromInventory(Inventory inv) {
-        int points = 0;
-        for (ItemStack item : inv.getContents()) {
-            if (item == null) continue;
-            points += item.getAmount();
-        }
-        return points;
     }
 
     public void toggleGuildChat(Player player) {
@@ -334,8 +358,8 @@ public class GuildManager {
     }
 
     public void sendGuildMessage(Guild guild, Player sender, String message) {
-        Guild.MemberInfo senderInfo = guild.getMembers().get(sender.getUniqueId());
-        String rankName = senderInfo != null ? senderInfo.getRankName() : "Member";
+        Member senderInfo = guild.getMembers().get(sender.getUniqueId());
+        String rankName = senderInfo != null ? senderInfo.getRank() : "Member";
 
         String format = messageManager.getMessage("member", "guild_chat_format", Map.of(
                 "player", sender.getName(),
@@ -348,6 +372,17 @@ public class GuildManager {
             if (member != null && member.isOnline()) {
                 // Xử lý PlaceholderAPI cho từng người nhận
                 String parsedMessage = PlaceholderAPI.setPlaceholders(member, format);
+                member.sendMessage(parsedMessage);
+            }
+        }
+    }
+
+    public void broadcastToGuild(Guild guild, String message) {
+        for (UUID memberId : guild.getMembers().keySet()) {
+            Player member = Bukkit.getPlayer(memberId);
+            if (member != null && member.isOnline()) {
+                // Xử lý PlaceholderAPI cho từng người nhận
+                String parsedMessage = PlaceholderAPI.setPlaceholders(member, message);
                 member.sendMessage(parsedMessage);
             }
         }
@@ -380,9 +415,52 @@ public class GuildManager {
                 (point.getZ() >= zMin && point.getZ() <= zMax);
     }
 
-    public static BlockVector3 pasteSchematic(JavaPlugin plugin, Location centerLocation, String fileName) {
+    public static BlockVector3 pasteSchematicAtBase(JavaPlugin plugin, String baseId, String fileName) {
+        Bukkit.getLogger().info("[DEBUG] Bắt đầu paste schematic tại base: " + baseId);
+
+        try {
+            // Đọc dữ liệu base từ file JSON
+            Map<String, BaseData.BaseClaim> bases = BaseData.loadBases();
+            BaseData.BaseClaim baseClaim = bases.get(baseId);
+
+            if (baseClaim == null) {
+                throw new IllegalArgumentException("Không tìm thấy base với ID: " + baseId);
+            }
+
+            // Tính toán center của base từ pos1 và pos2
+            double centerX = (baseClaim.pos1.getX() + baseClaim.pos2.getX()) / 2.0;
+            double centerY = (baseClaim.pos1.getY() + baseClaim.pos2.getY()) / 2.0;
+            double centerZ = (baseClaim.pos1.getZ() + baseClaim.pos2.getZ()) / 2.0;
+
+            Bukkit.getLogger().info("[DEBUG] Base pos1: " + baseClaim.pos1.getX() + ", " + baseClaim.pos1.getY() + ", " + baseClaim.pos1.getZ());
+            Bukkit.getLogger().info("[DEBUG] Base pos2: " + baseClaim.pos2.getX() + ", " + baseClaim.pos2.getY() + ", " + baseClaim.pos2.getZ());
+            Bukkit.getLogger().info("[DEBUG] Base center: " + centerX + ", " + centerY + ", " + centerZ);
+
+            // Tạo Location tại center của base
+            World world = baseClaim.pos1.getWorld();
+            if (world == null) {
+                throw new IllegalArgumentException("World không tồn tại: " + baseClaim.pos1.getWorld().getName());
+            }
+
+            Location centerLocation = new Location(world, centerX, centerY, centerZ);
+
+            // Gọi phương thức paste schematic
+            return pasteSchematicAtLocation(plugin, centerLocation, fileName);
+
+        } catch (Exception e) {
+            Bukkit.getLogger().severe("[ERROR] Lỗi khi paste schematic tại base: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Lỗi khi paste schematic tại base: " + e.getMessage(), e);
+        }
+    }
+
+    public static BlockVector3 pasteSchematicAtLocation(JavaPlugin plugin, Location centerLocation, String fileName) {
+        Bukkit.getLogger().info("[DEBUG] Bắt đầu paste schematic: " + fileName);
+        Bukkit.getLogger().info("[DEBUG] Tại vị trí: " + centerLocation.getX() + ", " + centerLocation.getY() + ", " + centerLocation.getZ());
+
         try {
             File schematicFile = new File(plugin.getDataFolder(), "schem/" + fileName);
+            Bukkit.getLogger().info("[DEBUG] Đường dẫn schematic: " + schematicFile.getAbsolutePath());
 
             if (!schematicFile.exists() || !schematicFile.isFile()) {
                 throw new IllegalArgumentException("Schematic file không tồn tại: " + schematicFile.getPath());
@@ -390,30 +468,70 @@ public class GuildManager {
 
             World world = centerLocation.getWorld();
             if (world == null) {
-                throw new IllegalArgumentException("World không hợp lệ");
+                throw new IllegalArgumentException("World không hợp lệ (null)");
             }
 
             com.sk89q.worldedit.world.World faweWorld = FaweAPI.getWorld(world.getName());
+            if (faweWorld == null) {
+                throw new IllegalStateException("Không tìm thấy FAWE World cho: " + world.getName());
+            }
 
             Clipboard clipboard;
             ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
             if (format == null) {
-                throw new IllegalArgumentException("Không thể xác định định dạng schematic file");
+                throw new IllegalArgumentException("Không xác định được định dạng schematic file");
             }
+
             try (ClipboardReader reader = format.getReader(new FileInputStream(schematicFile))) {
                 clipboard = reader.read();
             }
 
-            int width = clipboard.getRegion().getWidth();
-            int height = clipboard.getRegion().getHeight();
-            int length = clipboard.getRegion().getLength();
+            Region region = clipboard.getRegion();
+            int width = region.getWidth();
+            int height = region.getHeight();
+            int length = region.getLength();
 
-            // Tính vị trí bắt đầu paste: lấy center trừ nửa kích thước schematic
-            BlockVector3 pasteLocation = BlockVector3.at(
-                    centerLocation.getBlockX() - width / 2,
-                    centerLocation.getBlockY(),
-                    centerLocation.getBlockZ() - length / 2
+            Bukkit.getLogger().info("[DEBUG] Kích thước schematic: " + width + "x" + height + "x" + length);
+
+            // Kiểm tra số block không phải air
+            int nonAirBlocks = 0;
+            for (BlockVector3 point : region) {
+                BaseBlock block = clipboard.getFullBlock(point);
+                if (!block.getBlockType().getId().equals("minecraft:air")) {
+                    nonAirBlocks++;
+                }
+            }
+            Bukkit.getLogger().info("[DEBUG] Số block không phải air: " + nonAirBlocks);
+
+            // Tính center thực sự của schematic (bao gồm cả Y)
+            BlockVector3 min = region.getMinimumPoint();
+            BlockVector3 max = region.getMaximumPoint();
+
+            BlockVector3 schematicCenter = BlockVector3.at(
+                    (min.getBlockX() + max.getBlockX()) / 2,
+                    (min.getBlockY() + max.getBlockY()) / 2,
+                    (min.getBlockZ() + max.getBlockZ()) / 2
             );
+
+            int offsetX = schematicCenter.getX() - min.getX();
+            int offsetY = schematicCenter.getY() - min.getY();
+            int offsetZ = schematicCenter.getZ() - min.getZ();
+
+            // Nếu bị lệch về west 1 block, +1 vào X
+            BlockVector3 pasteLocation = BlockVector3.at(
+                    (int) Math.floor(centerLocation.getX()) - offsetX,
+                    (int) Math.floor(centerLocation.getY()) - offsetY,
+                    (int) Math.floor(centerLocation.getZ()) - offsetZ + 3
+            );
+
+
+            Bukkit.getLogger().info("[DEBUG] Offset X,Y,Z: " + offsetX + ", " + offsetY + ", " + offsetZ);
+
+            Bukkit.getLogger().info("[DEBUG] Min point: " + min);
+            Bukkit.getLogger().info("[DEBUG] Max point: " + max);
+            Bukkit.getLogger().info("[DEBUG] Schematic center: " + schematicCenter);
+            Bukkit.getLogger().info("[DEBUG] Base center location: " + centerLocation.getX() + ", " + centerLocation.getY() + ", " + centerLocation.getZ());
+            Bukkit.getLogger().info("[DEBUG] Final paste location: " + pasteLocation);
 
             try (EditSession editSession = WorldEdit.getInstance().newEditSession(faweWorld)) {
                 ClipboardHolder clipboardHolder = new ClipboardHolder(clipboard);
@@ -424,17 +542,72 @@ public class GuildManager {
                         .build();
 
                 Operations.complete(operation);
-                editSession.flushQueue();
+                Bukkit.getLogger().info("[DEBUG] Paste schematic thành công tại base center!");
             }
 
             return BlockVector3.at(width, height, length);
 
         } catch (Exception e) {
+            Bukkit.getLogger().severe("[ERROR] Lỗi khi paste schematic: " + e.getMessage());
             e.printStackTrace();
             throw new RuntimeException("Lỗi khi xử lý schematic file: " + e.getMessage(), e);
         }
     }
 
+    // Thêm method để có thể điều chỉnh offset Y nếu cần
+    public static BlockVector3 pasteSchematicAtLocationWithOffset(JavaPlugin plugin, Location centerLocation, String fileName, int yOffset) {
+        Bukkit.getLogger().info("[DEBUG] Bắt đầu paste schematic với Y offset: " + yOffset);
+
+        // Điều chỉnh centerLocation với offset Y
+        Location adjustedLocation = centerLocation.clone();
+        adjustedLocation.setY(centerLocation.getY() + yOffset);
+
+        return pasteSchematicAtLocation(plugin, adjustedLocation, fileName);
+    }
+
+    // Method paste tại vị trí player đứng (thay vì center của base)
+    public static BlockVector3 pasteSchematicAtPlayer(JavaPlugin plugin, Player player, String fileName) {
+        Bukkit.getLogger().info("[DEBUG] Paste schematic tại vị trí player: " + player.getName());
+
+        Location playerLocation = player.getLocation();
+        // Căn chỉnh vào center của block
+        Location centerLocation = new Location(
+                playerLocation.getWorld(),
+                Math.floor(playerLocation.getX()) + 0.5,
+                Math.floor(playerLocation.getY()),
+                Math.floor(playerLocation.getZ()) + 0.5
+        );
+
+        return pasteSchematicAtLocation(plugin, centerLocation, fileName);
+    }
+
+
+
+    // Phương thức cập nhật level cho base sau khi paste thành công
+    public static void updateBaseLevel(String baseId, int newLevel) {
+        try {
+            Map<String, BaseData.BaseClaim> bases = BaseData.loadBases();
+            BaseData.BaseClaim baseClaim = bases.get(baseId);
+
+            if (baseClaim != null) {
+                baseClaim.level = newLevel;
+
+                // Lưu lại vào file
+                try (Writer writer = new FileWriter(BaseData.getBaseFile())) {
+                    Gson gson = new GsonBuilder()
+                            .registerTypeAdapter(Location.class, new BaseData.LocationAdapter())
+                            .setPrettyPrinting()
+                            .create();
+                    gson.toJson(bases, writer);
+
+                    Bukkit.getLogger().info("[DEBUG] Đã cập nhật level " + newLevel + " cho base " + baseId);
+                }
+            }
+        } catch (Exception e) {
+            Bukkit.getLogger().severe("[ERROR] Lỗi khi cập nhật level base: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 
     public static boolean saveBaseData(Map<String, BaseData.BaseClaim> allBases, Player player) {
         try (Writer writer = new FileWriter(BaseData.getBaseFile())) {
@@ -451,5 +624,146 @@ public class GuildManager {
         }
     }
 
+
+    public static int getMaxBaseLevel() {
+        return 10; // Hoặc đọc từ config
+    }
+
+    public static String getSchematicForLevel(int level) {
+        // Tên file schematic theo level
+        return "base_level_" + level + ".schem";
+    }
+
+    public static boolean canUpgradeBase(Guild guild, int currentLevel, int nextLevel) {
+        // Kiểm tra điều kiện upgrade
+        UpgradeRequirement req = getUpgradeRequirement(nextLevel);
+
+        // Kiểm tra số thành viên
+        if (guild.getMembers().size() < req.minMembers) {
+            return false;
+        }
+
+        // Kiểm tra tiền guild (nếu có hệ thống economy)
+        // if (guild.getMoney() < req.cost) return false;
+
+        // Kiểm tra items trong kho guild (nếu có)
+        // if (!guild.hasItems(req.requiredItems)) return false;
+
+        return true;
+    }
+
+    public static void consumeUpgradeResources(Guild guild, int level) {
+        // Trừ resources khi upgrade thành công
+        UpgradeRequirement req = getUpgradeRequirement(level);
+
+        // guild.removeMoney(req.cost);
+        // guild.removeItems(req.requiredItems);
+
+        // Lưu lại guild data
+    }
+
+    public static UpgradeRequirement getUpgradeRequirement(int level) {
+        // Định nghĩa điều kiện upgrade cho từng level
+        UpgradeRequirement req = new UpgradeRequirement();
+
+        switch (level) {
+            case 1:
+                req.minMembers = 3;
+                req.cost = 1000;
+                break;
+            case 2:
+                req.minMembers = 5;
+                req.cost = 2500;
+                break;
+            case 3:
+                req.minMembers = 8;
+                req.cost = 5000;
+                break;
+            case 4:
+                req.minMembers = 12;
+                req.cost = 10000;
+                break;
+            case 5:
+                req.minMembers = 15;
+                req.cost = 20000;
+                break;
+            default:
+                req.minMembers = level * 3;
+                req.cost = level * level * 1000;
+                break;
+        }
+
+        return req;
+    }
+
+    public static void showUpgradeRequirements(Player player, int level) {
+        UpgradeRequirement req = getUpgradeRequirement(level);
+
+        player.sendMessage("§c§l=== ĐIỀU KIỆN UPGRADE LEVEL " + level + " ===");
+        player.sendMessage("§7• Số thành viên tối thiểu: §f" + req.minMembers);
+        player.sendMessage("§7• Chi phí: §6" + req.cost + " coins");
+        // Thêm các điều kiện khác nếu có
+    }
+
+    // Class để lưu điều kiện upgrade
+    public static class UpgradeRequirement {
+        public int minMembers;
+        public int cost;
+        // Có thể thêm Map<Material, Integer> requiredItems;
+    }
+
+
+    //STORAGE
+    public Map<String, List<UUID>> getItemRequestMap() {
+        return this.itemRequests;
+    }
+
+    public void requestItem(String guildName, ItemStack item, UUID playerId) {
+        String key = itemKey(item);
+        itemRequests.putIfAbsent(key, new ArrayList<>());
+        if (!itemRequests.get(key).contains(playerId)) {
+            itemRequests.get(key).add(playerId);
+        }
+    }
+
+    public List<UUID> getItemRequesters(String guildName, ItemStack item) {
+        return itemRequests.getOrDefault(itemKey(item), new ArrayList<>());
+    }
+
+    public void clearItemRequest(String guildName, ItemStack item) {
+        itemRequests.remove(itemKey(item));
+    }
+
+    public String itemKey(ItemStack item) {
+        return item.getType().toString() + ":" + item.getDurability();
+    }
+
+    public void approveRequest(Player leader, ItemStack item) {
+        Guild g = getPlayerGuild(leader);
+        List<UUID> requesters = getItemRequesters(g.getName(), item);
+
+        if (requesters.isEmpty()) {
+            leader.sendMessage("§cKhông có ai xin item này.");
+            return;
+        }
+
+        UUID approved = requesters.get(0);
+        Player approvedPlayer = Bukkit.getPlayer(approved);
+        if (approvedPlayer != null) {
+            approvedPlayer.getInventory().addItem(item);
+            approvedPlayer.sendMessage("§aYêu cầu item của bạn đã được duyệt.");
+        }
+
+        // Tự động từ chối các người còn lại
+        for (int i = 1; i < requesters.size(); i++) {
+            UUID denied = requesters.get(i);
+            Player deniedPlayer = Bukkit.getPlayer(denied);
+            if (deniedPlayer != null) {
+                deniedPlayer.sendMessage("§cYêu cầu item của bạn bị từ chối (người khác đã được duyệt).");
+            }
+        }
+
+        clearItemRequest(g.getName(), item);
+    }
 
 }

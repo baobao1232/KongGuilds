@@ -22,24 +22,27 @@ public class BaseHologramManager {
         holograms.put(baseId, hologram);
     }
 
-    public static void createClaimedBaseHologram(String baseId, Location location, String guildName) {
+    public static void createClaimedBaseHologram(String baseId, Location location, String guildName, int level) {
         removeHologram(baseId); // Xoá nếu có sẵn
 
         Hologram hologram = DHAPI.createHologram("base_" + baseId, location, List.of(
-                "§6§lBASE AREA",
-                "§aĐã được claim bởi guild: §b" + guildName
+                "§6§l=== BASE ===",
+                "§eGuild: §f" + guildName,
+                "§eLevel: §6" + level,
+                "§7ID: " + baseId
         ));
 
         holograms.put(baseId, hologram);
     }
 
     public static void removeHologram(String baseId) {
-        Hologram holo = holograms.get(baseId);
+        String hologramName = "base_" + baseId;
+        Hologram holo = DHAPI.getHologram(hologramName); // Lấy lại hologram từ API
         if (holo != null) {
-            holo.delete();  // Hoặc holo.remove() tùy API thư viện hologram bạn dùng
-            holograms.remove(baseId);
+            holo.delete();
         }
     }
+
     public static void removeAllOrphans(Set<String> existingBaseIds) {
         Iterator<Map.Entry<String, Hologram>> it = holograms.entrySet().iterator();
         while (it.hasNext()) {
@@ -103,4 +106,35 @@ public class BaseHologramManager {
 
         Bukkit.getLogger().info("[CLEANUP] Tổng số hologram mồ côi đã bị xoá: " + removedCount);
     }
+
+    public static void updateBaseHologram(String baseId, Location location, String guildName, int level) {
+        // Xóa hologram cũ và tạo mới với level updated
+        // hologramAPI.removeHologram(baseId);
+        createClaimedBaseHologram(baseId, location, guildName, level);
+    }
+
+    public static void loadAllBaseHolograms() {
+        clearAll();
+        Map<String, BaseData.BaseClaim> bases = BaseData.loadBases();
+
+        for (Map.Entry<String, BaseData.BaseClaim> entry : bases.entrySet()) {
+            String baseId = entry.getKey();
+            BaseData.BaseClaim baseClaim = entry.getValue();
+            Location location = baseClaim.getLocation();
+
+            if (location == null) {
+                Bukkit.getLogger().warning("[BaseHologram] Không thể tạo hologram: base " + baseId + " không có location.");
+                continue;
+            }
+
+            if (baseClaim.isClaimed()) {
+                createClaimedBaseHologram(baseId, location, baseClaim.getGuildName(), baseClaim.getLevel());
+            } else {
+                createUnclaimedBaseHologram(baseId, location);
+            }
+        }
+
+        Bukkit.getLogger().info("[BaseHologram] Đã load lại tất cả hologram base.");
+    }
+
 }

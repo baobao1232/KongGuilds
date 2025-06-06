@@ -1,6 +1,7 @@
 package king.kongguilds.Gui;
 
 import king.kongguilds.Model.Guild;
+import king.kongguilds.Model.Member;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -16,7 +17,8 @@ import java.util.UUID;
 public class GuildMemberEditGUI {
 
     public static void openEditGUI(Player editor, Guild guild, UUID targetMemberId) {
-        Guild.MemberInfo targetMember = guild.getMembers().get(targetMemberId);
+        // Sửa lại kiểu: Member, không phải MemberInfo
+        Member targetMember = guild.getMembers().get(targetMemberId);
         if (targetMember == null) {
             editor.sendMessage(ChatColor.RED + "Thành viên không tồn tại trong guild.");
             return;
@@ -32,8 +34,8 @@ public class GuildMemberEditGUI {
             String playerName = Bukkit.getOfflinePlayer(targetMemberId).getName();
             meta.setDisplayName(ChatColor.YELLOW + (playerName != null ? playerName : targetMember.getName()));
             List<String> lore = new ArrayList<>();
-            lore.add(ChatColor.GRAY + "Rank: " + targetMember.getRankName());
-            lore.add(ChatColor.GRAY + "Role: " + targetMember.getMemberType());
+            lore.add(ChatColor.GRAY + "Rank: " + targetMember.getRank());
+            lore.add(ChatColor.GRAY + "Join Date: " + targetMember.getJoinDate());
             meta.setLore(lore);
             memberHead.setItemMeta(meta);
         }
@@ -68,4 +70,5 @@ public class GuildMemberEditGUI {
 
         editor.openInventory(gui);
     }
+
 }

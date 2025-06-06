@@ -4,6 +4,7 @@ import com.sk89q.worldedit.extent.clipboard.Clipboard;
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat;
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats;
 import com.sk89q.worldedit.extent.clipboard.io.ClipboardReader;
+import com.sk89q.worldedit.math.BlockVector3;
 import king.kongguilds.Base.BaseData;
 import king.kongguilds.Base.BaseHologramManager;
 import king.kongguilds.Fawe.SelectedPositionsManager;
@@ -11,6 +12,8 @@ import king.kongguilds.Gui.GuildGUI;
 import king.kongguilds.Manager.GuildManager;
 import king.kongguilds.Manager.MessageManager;
 import king.kongguilds.Model.Guild;
+import king.kongguilds.Model.Member;
+import king.kongguilds.WorldGuard.BaseRegionManager;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -303,18 +306,32 @@ public class GuildCommands implements CommandExecutor {
                             return true;
                         }
 
+                        if (BaseData.getBaseClaim(id) != null) {
+                            player.sendMessage(ChatColor.RED + "ID base này đã tồn tại! Vui lòng chọn ID khác.");
+                            return true;
+                        }
+
                         String guildName = "GuildExample"; // TODO: lấy tên guild thật từ player
-                        BaseData.saveBaseToFileWithId(id, guildName, player.getName(), positions[0], positions[1]);
+                        String owner = player.getName();
+                        int level = 1;
+
+                        boolean success = BaseData.saveBaseToFileWithId(id, guildName, owner, owner, level, positions[0], positions[1]);
+
+                        if (!success) {
+                            player.sendMessage(ChatColor.RED + "Không thể lưu base. Có thể ID đã tồn tại.");
+                            return true;
+                        }
 
                         Location center = guildManager.getCenter(positions[0], positions[1]);
                         if (center != null) {
-                            BaseHologramManager.createUnclaimedBaseHologram(id, center);  // <-- Gọi manager thay vì gọi trực tiếp DHAPI
+                            BaseHologramManager.createUnclaimedBaseHologram(id, center);
                         }
 
                         SelectedPositionsManager.clearPositions(player);
                         player.sendMessage(ChatColor.GREEN + "Đã claim base ID " + id + " cho guild " + guildName + " và tạo hologram.");
                         return true;
                     }
+
 
 
                     if (subCmd.equalsIgnoreCase("remove")) {
@@ -369,14 +386,26 @@ public class GuildCommands implements CommandExecutor {
                     player.sendMessage(messageManager.getMessage("member", "guild_not_exist"));
                     return true;
                 }
+                Member member = playerGuild.getMembers().get(player.getUniqueId());
+                Guild.RankType rank = null;
 
-                // Kiểm tra quyền mời
-                Guild.MemberInfo info = playerGuild.getMembers().get(player.getUniqueId());
-                Guild.RankType rank = info != null ? info.getRank() : null;
+                if (member != null) {
+                    try {
+                        rank = Guild.RankType.valueOf(member.getRank().toUpperCase().replace("-", ""));
+                    } catch (IllegalArgumentException e) {
+                        // Rank không hợp lệ, gán mặc định MEMBER
+                        rank = Guild.RankType.MEMBER;
+                    }
+                } else {
+                    // Nếu không phải thành viên guild
+                    rank = Guild.RankType.MEMBER;
+                }
+
                 if (rank != Guild.RankType.LEADER && rank != Guild.RankType.OFFICER) {
                     player.sendMessage("§cChỉ Leader hoặc Officer mới có quyền mời thành viên.");
                     return true;
                 }
+
 
                 Player targetPlayer = Bukkit.getPlayerExact(args[1]);
                 if (targetPlayer == null) {
@@ -424,7 +453,7 @@ public class GuildCommands implements CommandExecutor {
                     return true;
                 }
 
-                GuildGUI.displayGuildInfo(player, guild);
+                GuildGUI.displayGuildInfo(player, guild, 0);
                 break;
             case "kick":
                 if (args.length < 2) {
@@ -470,8 +499,8 @@ public class GuildCommands implements CommandExecutor {
 
                 // Gửi thông báo cho tất cả thành viên nếu online
                 for (UUID memberId : guildToDisband.getMembers().keySet()) {
-                    Player member = Bukkit.getPlayer(memberId);
-                    if (member != null && member.isOnline()) {
+                    Player members = Bukkit.getPlayer(memberId);
+                    if (members != null && members.isOnline()) {
                         player.sendMessage(messageManager.getMessage("member", "disband_success", Map.of("guild", nameToRemove)));
                     }
                 }
@@ -531,15 +560,27 @@ public class GuildCommands implements CommandExecutor {
                     return true;
                 }
 
-                Guild.MemberInfo infog = g.getMembers().get(player.getUniqueId());
-                if (infog == null || infog.getRank() != Guild.RankType.LEADER) {
+                Member memberInfo = g.getMembers().get(player.getUniqueId());
+                if (memberInfo == null) {
+                    player.sendMessage("§cBạn không phải thành viên guild.");
+                    return true;
+                }
+
+                Guild.RankType ranks;
+                try {
+                    ranks = Guild.RankType.valueOf(memberInfo.getRank().toUpperCase().replace("-", ""));
+                } catch (IllegalArgumentException e) {
+                    ranks = Guild.RankType.MEMBER;
+                }
+
+                if (ranks != Guild.RankType.LEADER) {
                     player.sendMessage("§cChỉ leader mới được phép claim base.");
                     return true;
                 }
 
                 Map<String, BaseData.BaseClaim> allBases = BaseData.loadBases();
                 for (BaseData.BaseClaim base : allBases.values()) {
-                    if (base.guildName.equalsIgnoreCase(g.getName()) && base.owner != null && !base.owner.isEmpty()) {
+                    if (base.guildName != null && base.guildName.equalsIgnoreCase(g.getName()) && base.owner != null && !base.owner.isEmpty()) {
                         player.sendMessage("§cGuild của bạn đã sở hữu một base.");
                         return true;
                     }
@@ -557,16 +598,26 @@ public class GuildCommands implements CommandExecutor {
                         // Cập nhật dữ liệu base
                         base.owner = player.getName();
                         base.guildName = g.getName();
+                        g.setBaseID(entry.getKey());
 
                         if (!guildManager.saveBaseData(allBases, player)) {
                             player.sendMessage("§cLỗi khi lưu dữ liệu base.");
                             return true;
                         }
 
+                        // Tạo WorldGuard region cho base
+                        if (!BaseRegionManager.createBaseRegion(entry.getKey(), base.pos1, base.pos2, g, player.getWorld())) {
+                            player.sendMessage("§cLỗi khi tạo region bảo vệ cho base.");
+                            // Rollback dữ liệu base nếu tạo region thất bại
+                            base.owner = null;
+                            base.guildName = null;
+                            guildManager.saveBaseData(allBases, player);
+                            return true;
+                        }
+
                         // Tính trung tâm vùng
                         Location center = guildManager.getCenter(base.pos1, base.pos2);
                         if (center != null) {
-                            // Tính toán vị trí paste chính xác dựa trên kích thước schematic
                             File schematicFile = new File(plugin.getDataFolder(), "schem/basetest01.schem");
                             ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
                             if (format == null) {
@@ -581,15 +632,13 @@ public class GuildCommands implements CommandExecutor {
                                 int height = clipboard.getRegion().getHeight();
                                 int length = clipboard.getRegion().getLength();
 
-                                // Vị trí chính xác để paste schematic (center - 1/2 chiều ngang)
                                 Location pasteLocation = center.clone().subtract(width / 2, 0, length / 2);
 
-                                // Paste schematic
-                                guildManager.pasteSchematic(plugin, pasteLocation, "basetest01.schem");
+                                String baseIdForPaste = entry.getKey();
+                                guildManager.pasteSchematicAtBase(plugin, baseIdForPaste, "basetest01.schem");
 
-                                // Tạo hologram
                                 Location holoLoc = center.clone().add(0, 2, 0);
-                                BaseHologramManager.createClaimedBaseHologram(entry.getKey(), holoLoc, g.getName());
+                                BaseHologramManager.createClaimedBaseHologram(entry.getKey(), holoLoc, g.getName(), g.getLevel());
 
                             } catch (IOException e) {
                                 player.sendMessage("§cLỗi khi đọc schematic.");
@@ -605,9 +654,108 @@ public class GuildCommands implements CommandExecutor {
 
                 if (claimed) {
                     player.sendMessage("§aBạn đã chiếm base thành công cho guild '" + g.getName() + "'.");
+                    player.sendMessage("§aRegion bảo vệ đã được tạo! Không có PvP trong khu vực này.");
                 } else {
                     player.sendMessage("§cKhông có base trống nào ở vị trí bạn đang đứng.");
                 }
+                return true;
+
+            // Thêm vào switch case của command handler
+            case "upgrade":
+                if (args.length < 2 || !args[1].equalsIgnoreCase("base")) {
+                    player.sendMessage("§cSử dụng: /g upgrade base");
+                    return true;
+                }
+
+                if (guild == null) {
+                    player.sendMessage("§cBạn chưa tham gia guild nào.");
+                    return true;
+                }
+
+                Member memberInfos = guild.getMembers().get(player.getUniqueId());
+                if (memberInfos == null) {
+                    player.sendMessage("§cBạn không phải thành viên guild.");
+                    return true;
+                }
+
+                Guild.RankType rankss;
+                try {
+                    rankss = Guild.RankType.valueOf(memberInfos.getRank().toUpperCase().replace("-", ""));
+                } catch (IllegalArgumentException e) {
+                    rankss = Guild.RankType.MEMBER; // mặc định nếu không đúng rank
+                }
+
+                if (rankss != Guild.RankType.LEADER) {
+                    player.sendMessage("§cChỉ leader mới được phép upgrade base.");
+                    return true;
+                }
+
+                // Tìm base của guild
+                Map<String, BaseData.BaseClaim> allBasess = BaseData.loadBases();
+                String baseId = null;
+                BaseData.BaseClaim playerBase = null;
+
+                for (Map.Entry<String, BaseData.BaseClaim> entry : allBasess.entrySet()) {
+                    BaseData.BaseClaim base = entry.getValue();
+                    if (base.guildName.equalsIgnoreCase(guild.getName()) &&
+                            base.owner != null && !base.owner.isEmpty()) {
+                        baseId = entry.getKey();
+                        playerBase = base;
+                        break;
+                    }
+                }
+
+                if (playerBase == null) {
+                    player.sendMessage("§cGuild của bạn chưa sở hữu base nào.");
+                    return true;
+                }
+
+                // Kiểm tra level hiện tại và điều kiện upgrade
+                int currentLevel = playerBase.level;
+                int nextLevel = currentLevel + 1;
+
+                if (nextLevel > guildManager.getMaxBaseLevel()) {
+                    player.sendMessage("§cBase đã đạt level tối đa!");
+                    return true;
+                }
+
+                // Kiểm tra điều kiện upgrade (ví dụ: tiền, item, thành viên...)
+                if (!guildManager.canUpgradeBase(guild, currentLevel, nextLevel)) {
+                    player.sendMessage("§cKhông đủ điều kiện để upgrade base lên level " + nextLevel);
+                    guildManager.showUpgradeRequirements(player, nextLevel);
+                    return true;
+                }
+
+                try {
+                    // Paste schematic level mới
+                    String schematicName = guildManager.getSchematicForLevel(nextLevel);
+                    BlockVector3 size = guildManager.pasteSchematicAtBase(plugin, baseId, schematicName);
+
+                    // Cập nhật level trong database
+                    guildManager.updateBaseLevel(baseId, nextLevel);
+
+                    // Trừ resources cần thiết
+                    guildManager.consumeUpgradeResources(guild, nextLevel);
+
+                    // Cập nhật hologram
+                    Location center = guildManager.getCenter(playerBase.pos1, playerBase.pos2);
+                    if (center != null) {
+                        Location holoLoc = center.clone().add(0, 2, 0);
+                        BaseHologramManager.updateBaseHologram(baseId, holoLoc, guild.getName(), nextLevel);
+                    }
+
+                    player.sendMessage("§a§lUPGRADE THÀNH CÔNG!");
+                    player.sendMessage("§eBased đã được nâng cấp lên level §6" + nextLevel);
+                    player.sendMessage("§7Kích thước schematic: §f" + size.getX() + "x" + size.getY() + "x" + size.getZ());
+
+                    // Thông báo cho toàn guild
+                    guildManager.broadcastToGuild(guild,"§6" + player.getName() + " §ađã nâng cấp base lên level §6" + nextLevel + "§a!");
+
+                } catch (Exception e) {
+                    player.sendMessage("§cLỗi khi upgrade base: " + e.getMessage());
+                    e.printStackTrace();
+                }
+
                 return true;
 
             default:

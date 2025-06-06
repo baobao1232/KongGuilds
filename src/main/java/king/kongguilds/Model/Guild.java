@@ -15,7 +15,7 @@ import java.util.*;
 public class Guild {
     private String name;
     private UUID leader;
-    private Map<UUID, MemberInfo> members = new HashMap<>();
+    private Map<UUID, Member> members = new HashMap<>();
 
     // Dùng base64 lưu kho chung trong file JSON
     private String sharedStorageBase64 = "";
@@ -25,7 +25,7 @@ public class Guild {
 
     private int level = 1;
     private int exp = 0;
-
+    private String baseID = null;
     private transient JavaPlugin plugin;
 
     public Guild(String name, UUID leader, JavaPlugin plugin) {
@@ -97,7 +97,7 @@ public class Guild {
         return GuildConfig.getExpForLevel(level + 1);
     }
 
-    public Map<UUID, MemberInfo> getMembers() {
+    public Map<UUID, Member> getMembers() {
         return members;
     }
 
@@ -105,10 +105,18 @@ public class Guild {
         if (name == null || name.isEmpty()) {
             name = Bukkit.getOfflinePlayer(memberId).getName();
         }
-        members.put(memberId, new MemberInfo(name, rank, memberType, points));
+
+        String joinDate = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date());
+        members.put(memberId, new Member(memberId, name, joinDate, rank.name(), points));
     }
 
+    public String getBaseID() {
+        return baseID;
+    }
 
+    public void setBaseID(String baseID) {
+        this.baseID = baseID;
+    }
 
     public void kickMember(UUID memberId) {
         members.remove(memberId);
@@ -118,12 +126,12 @@ public class Guild {
         return members.containsKey(memberId);
     }
 
-    public List<Map.Entry<UUID, MemberInfo>> getSortedMembers() {
-        List<Map.Entry<UUID, MemberInfo>> sorted = new ArrayList<>(members.entrySet());
+    public List<Map.Entry<UUID, Member>> getSortedMembers() {
+        List<Map.Entry<UUID, Member>> sorted = new ArrayList<>(members.entrySet());
         sorted.sort((a, b) -> {
             if (a.getKey().equals(leader)) return -1;
             if (b.getKey().equals(leader)) return 1;
-            return Integer.compare(b.getValue().getPoints(), a.getValue().getPoints());
+            return Integer.compare(b.getValue().getScore(), a.getValue().getScore());
         });
         return sorted;
     }
@@ -182,38 +190,6 @@ public class Guild {
             plugin.getLogger().warning("Lỗi khi save kho chung guild " + name + ": " + e.getMessage());
         }
     }
-
-    public static class MemberInfo {
-        private String name;
-        private RankType rank;
-        private String memberType;
-        private int points;
-
-        public MemberInfo(String name, String rankName, String memberType, int points) {
-            this.name = name;
-            this.rank = RankType.valueOf(rankName.toUpperCase().replace("-", "_")); // fallback xử lý
-            this.memberType = memberType;
-            this.points = points;
-        }
-
-        public MemberInfo(String name, RankType rank, String memberType, int points) {
-            this.name = name;
-            this.rank = rank;
-            this.memberType = memberType;
-            this.points = points;
-        }
-
-        public String getName() { return name; }
-        public RankType getRank() { return rank; }
-        public String getRankName() { return rank.getDisplayName(); }
-        public String getMemberType() { return memberType; }
-        public int getPoints() { return points; }
-
-        public void setRank(RankType newRank) {
-            this.rank = newRank;
-        }
-    }
-
 
     public enum RankType {
         MEMBER(1, "Member"),

@@ -14,6 +14,7 @@ public class BaseData {
 
     private static File BASE_FILE;
     private static final Gson gson;
+    private static Map<String, BaseClaim> cachedBases = new HashMap<>();
 
     static {
         gson = new GsonBuilder()
@@ -22,13 +23,12 @@ public class BaseData {
                 .create();
     }
 
-    // Phải set BASE_FILE khi plugin khởi động, ví dụ trong onEnable()
+    // Phải gọi setBaseFile trong onEnable
     public static void setBaseFile(File dataFolder) {
         BASE_FILE = new File(dataFolder, "base.json");
         if (!BASE_FILE.exists()) {
             try {
                 BASE_FILE.createNewFile();
-                // Khởi tạo file rỗng dạng map rỗng {}
                 try (Writer writer = new FileWriter(BASE_FILE)) {
                     writer.write("{}");
                 }
@@ -36,29 +36,33 @@ public class BaseData {
                 e.printStackTrace();
             }
         }
+        loadCache();  // load cache ngay khi set file
     }
 
-    public static class BaseClaim {
-        public String guildName;
-        public String adminCreator;
-        public Location pos1;
-        public Location pos2;
-        public String owner = "";
-        public int level = 0;
-
-        public BaseClaim() {}
-
-        public BaseClaim(String guildName, String adminCreator, Location pos1, Location pos2) {
-            this.guildName = guildName;
-            this.adminCreator = adminCreator;
-            this.pos1 = pos1;
-            this.pos2 = pos2;
-        }
+    // Load cache từ file
+    public static void loadCache() {
+        cachedBases = loadBasesFromFile();
     }
 
-    public static Map<String, BaseClaim> loadBases() {
+    // Trả về bản sao hoặc readonly để tránh sửa ngoài cache trực tiếp
+    public static Map<String, BaseClaim> getCachedBases() {
+        return new HashMap<>(cachedBases);
+    }
+
+    public static BaseClaim getBaseClaim(String baseID) {
+        return cachedBases.get(baseID);
+    }
+
+    public static World getWorldByBaseID(String baseID) {
+        BaseClaim base = getBaseClaim(baseID);
+        if (base == null || base.pos1 == null) return null;
+        return base.pos1.getWorld();
+    }
+
+    // Nội bộ load từ file thật sự, không cập nhật cache
+    private static Map<String, BaseClaim> loadBasesFromFile() {
         try (Reader reader = new FileReader(BASE_FILE)) {
-            Type type = new TypeToken<Map<String, BaseClaim>>(){}.getType();
+            Type type = new TypeToken<Map<String, BaseClaim>>() {}.getType();
             Map<String, BaseClaim> map = gson.fromJson(reader, type);
             if (map == null) return new HashMap<>();
             return map;
@@ -68,32 +72,52 @@ public class BaseData {
         }
     }
 
-    public static void saveBaseToFile(String guildName, String adminCreator, Location pos1, Location pos2) {
-        Map<String, BaseClaim> bases = loadBases();
+    // Lấy bản cached bases hiện tại
+    public static Map<String, BaseClaim> loadBases() {
+        return getCachedBases();
+    }
 
-        BaseClaim newBase = new BaseClaim(guildName, adminCreator, pos1, pos2);
-        bases.put(guildName, newBase);
+    // Lưu và cập nhật cache
+    public static boolean saveBaseToFileWithId(String id, String guildName, String adminCreator, String owner, int level, Location pos1, Location pos2) {
+        if (cachedBases.containsKey(id)) return false; // Đã có base với ID này
+        BaseClaim claim = new BaseClaim(guildName, adminCreator, pos1, pos2);
+        claim.owner = owner;
+        claim.level = level;
+        cachedBases.put(id, claim);
+        saveCacheToFile();
+        return true;
+    }
 
+
+    private static void saveCacheToFile() {
         try (Writer writer = new FileWriter(BASE_FILE)) {
-            gson.toJson(bases, writer);
+            gson.toJson(cachedBases, writer);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public static void saveBaseToFileWithId(String id, String guildName, String adminCreator, Location pos1, Location pos2) {
-        Map<String, BaseClaim> bases = loadBases();
-
-        BaseClaim newBase = new BaseClaim(guildName, adminCreator, pos1, pos2);
-        bases.put(id, newBase);
-
-        try (Writer writer = new FileWriter(BASE_FILE)) {
-            gson.toJson(bases, writer);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    public static boolean removeBaseById(String id) {
+        if (!cachedBases.containsKey(id)) return false;
+        BaseHologramManager.removeHologram(id);
+        cachedBases.remove(id);
+        saveCacheToFile();
+        return true;
     }
 
+    // Các hàm kiểm tra trùng lặp vùng nên lấy từ cache
+    public static boolean canClaimBase(Location newPos1, Location newPos2) {
+        for (BaseClaim base : cachedBases.values()) {
+            if (base.pos1 == null || base.pos2 == null) continue;
+
+            if (base.pos1.getWorld().equals(newPos1.getWorld())) {
+                if (isOverlap(base.pos1, base.pos2, newPos1, newPos2)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 
     public static boolean isOverlap(Location pos1a, Location pos2a, Location pos1b, Location pos2b) {
         int ax1 = Math.min(pos1a.getBlockX(), pos2a.getBlockX());
@@ -110,18 +134,6 @@ public class BaseData {
         boolean zOverlap = az1 <= bz2 && az2 >= bz1;
 
         return xOverlap && zOverlap;
-    }
-
-    public static boolean canClaimBase(Location newPos1, Location newPos2) {
-        Map<String, BaseClaim> bases = loadBases();
-        for (BaseClaim base : bases.values()) {
-            if (base.pos1.getWorld().equals(newPos1.getWorld())) {
-                if (isOverlap(base.pos1, base.pos2, newPos1, newPos2)) {
-                    return false;
-                }
-            }
-        }
-        return true;
     }
 
     // Gson adapter cho Location Bukkit vì không thể serialize thẳng
@@ -152,25 +164,63 @@ public class BaseData {
         }
     }
 
-    public static boolean removeBaseById(String id) {
-        Map<String, BaseClaim> bases = loadBases();
-        BaseClaim base = bases.get(id);
-        if (base == null) return false;
+    public static class BaseClaim {
+        public String guildName;
+        public String adminCreator;
+        public Location pos1;
+        public Location pos2;
+        public String owner = "";
+        public int level = 0;
 
-        // Bỏ kiểm tra owner => xóa thẳng
-        bases.remove(id);
+        public BaseClaim() {}
 
-        try (Writer writer = new FileWriter(BASE_FILE)) {
-            gson.toJson(bases, writer);
-        } catch (IOException e) {
-            e.printStackTrace();
+        public BaseClaim(String guildName, String adminCreator, Location pos1, Location pos2) {
+            this.guildName = guildName;
+            this.adminCreator = adminCreator;
+            this.pos1 = pos1;
+            this.pos2 = pos2;
         }
 
-        return true;
+        public boolean isClaimed() {
+            return owner != null && !owner.isEmpty();
+        }
+
+        public Location getLocation() {
+            if (pos1 == null || pos2 == null) return null;
+
+            World world = pos1.getWorld();
+            if (world == null || !world.equals(pos2.getWorld())) return null;
+
+            // Lấy min/max cho từng trục
+            double minX = Math.min(pos1.getX(), pos2.getX());
+            double maxX = Math.max(pos1.getX(), pos2.getX());
+            double minZ = Math.min(pos1.getZ(), pos2.getZ());
+            double maxZ = Math.max(pos1.getZ(), pos2.getZ());
+
+            // Trung điểm chính xác
+            double centerX = (minX + maxX) / 2.0;
+            double centerZ = (minZ + maxZ) / 2.0;
+
+            // Lấy block cao nhất tại floor(centerX), floor(centerZ)
+            int blockX = (int) Math.floor(centerX);
+            int blockZ = (int) Math.floor(centerZ);
+            int highestY = world.getHighestBlockYAt(blockX, blockZ);
+
+            // Trả về tọa độ giữa, Y nằm trên mặt đất
+            return new Location(world, centerX, highestY + 4, centerZ);
+        }
+
+
+        public String getGuildName() {
+            return guildName;
+        }
+
+        public int getLevel() {
+            return level;
+        }
     }
 
     public static File getBaseFile() {
         return BASE_FILE;
     }
-
 }
