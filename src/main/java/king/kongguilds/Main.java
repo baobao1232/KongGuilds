@@ -4,6 +4,7 @@ import king.kongguilds.Base.BaseData;
 import king.kongguilds.Base.BaseHologramManager;
 import king.kongguilds.Command.GuildCommands;
 import king.kongguilds.Config.GuildConfig;
+import king.kongguilds.License.LicenseManager;
 import king.kongguilds.Listener.GuildListener;
 import king.kongguilds.Manager.GuildManager;
 import king.kongguilds.Manager.MessageManager;
@@ -23,6 +24,16 @@ public class Main extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
+        LicenseManager licenseManager = new LicenseManager(this);
+
+        if (!licenseManager.isLicenseValid()) {
+            getLogger().severe("❌ Plugin sẽ bị vô hiệu hóa do license không hợp lệ.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        getLogger().info("✅ License OK. Đang bật plugin...");
+
         createPluginFolder();
         loadPluginConfig();
         if (!loadMessages()) return;
@@ -36,9 +47,9 @@ public class Main extends JavaPlugin {
         startTasks();
 
         BaseHologramManager.loadAllBaseHolograms();
-        for (Method m : this.getClass().getDeclaredMethods()) {
-            getLogger().info("[KongGuilds] Method found: " + m.getName());
-        }
+//        for (Method m : this.getClass().getDeclaredMethods()) {
+//            getLogger().info("[KongGuilds] Method found: " + m.getName());
+//        }
         getLogger().info("KongGuilds đã bật thành công!");
     }
 

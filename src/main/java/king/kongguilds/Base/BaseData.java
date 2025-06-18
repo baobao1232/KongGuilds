@@ -210,6 +210,18 @@ public class BaseData {
             return new Location(world, centerX, highestY + 4, centerZ);
         }
 
+        public Location getHologramLocation() {
+            if (pos1 == null || pos2 == null) return null;
+
+            World world = pos1.getWorld();
+            if (world == null || !world.equals(pos2.getWorld())) return null;
+
+            double centerX = (pos1.getX() + pos2.getX()) / 2.0;
+            double centerZ = (pos1.getZ() + pos2.getZ()) / 2.0;
+            double centerY = Math.max(pos1.getY(), pos2.getY()) + 2;
+
+            return new Location(world, centerX, centerY, centerZ);
+        }
 
         public String getGuildName() {
             return guildName;
@@ -223,4 +235,5 @@ public class BaseData {
     public static File getBaseFile() {
         return BASE_FILE;
     }
+
 }

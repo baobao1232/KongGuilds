@@ -17,6 +17,7 @@ import king.kongguilds.WorldGuard.BaseRegionManager;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -311,11 +312,12 @@ public class GuildCommands implements CommandExecutor {
                             return true;
                         }
 
-                        String guildName = "GuildExample"; // TODO: lấy tên guild thật từ player
-                        String owner = player.getName();
+                        String guildName = ""; // TODO: lấy tên guild thật từ player
+                        String admincreator = player.getName();
+                        String owner = "";
                         int level = 1;
 
-                        boolean success = BaseData.saveBaseToFileWithId(id, guildName, owner, owner, level, positions[0], positions[1]);
+                        boolean success = BaseData.saveBaseToFileWithId(id, guildName, admincreator, owner, level, positions[0], positions[1]);
 
                         if (!success) {
                             player.sendMessage(ChatColor.RED + "Không thể lưu base. Có thể ID đã tồn tại.");
@@ -323,8 +325,38 @@ public class GuildCommands implements CommandExecutor {
                         }
 
                         Location center = guildManager.getCenter(positions[0], positions[1]);
+
                         if (center != null) {
                             BaseHologramManager.createUnclaimedBaseHologram(id, center);
+                        }
+
+                        if (center == null) {
+                            player.sendMessage("§cKhông tính được trung tâm base.");
+                            return true;
+                        }
+
+                        File schematicFile = new File(plugin.getDataFolder(), "schem/baseb0.schem");
+                        ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
+                        if (format == null) {
+                            player.sendMessage("§cKhông xác định được định dạng schematic.");
+                            return true;
+                        }
+
+                        try (ClipboardReader reader = format.getReader(new FileInputStream(schematicFile))) {
+                            Clipboard clipboard = reader.read();
+
+                            int width = clipboard.getRegion().getWidth();
+                            int length = clipboard.getRegion().getLength();
+
+                            Location pasteLocation = center.clone().subtract(width / 2, 0, length / 2);
+
+                            // Paste schematic
+                            guildManager.pasteSchematicAtBase(player, plugin, id, "baseb0.schem");
+
+                        } catch (IOException e) {
+                            player.sendMessage("§cLỗi khi đọc schematic.");
+                            e.printStackTrace();
+                            return true;
                         }
 
                         SelectedPositionsManager.clearPositions(player);
@@ -341,16 +373,41 @@ public class GuildCommands implements CommandExecutor {
                         }
 
                         String baseIdToRemove = args[3];
+
+                        // Load lại danh sách base
+                        Map<String, BaseData.BaseClaim> allBases = BaseData.loadBases();
+                        BaseData.BaseClaim base = allBases.get(baseIdToRemove);
+
+                        if (base == null) {
+                            player.sendMessage(ChatColor.RED + "Base '" + baseIdToRemove + "' không tồn tại.");
+                            return true;
+                        }
+
+                        // Lấy world từ pos1 hoặc worldName
+                        World world = null;
+                        if (base.pos1 != null && base.pos1.getWorld() != null) {
+                            world = base.pos1.getWorld();
+                        }
+
+                        if (world == null) {
+                            player.sendMessage(ChatColor.RED + "Không thể xác định world của base.");
+                            return true;
+                        }
+
+                        guildManager.clearBaseArea(plugin, baseIdToRemove);
                         boolean result = BaseData.removeBaseById(baseIdToRemove);
 
                         if (result) {
-                            BaseHologramManager.removeHologram(baseIdToRemove);  // Dùng manager xóa hologram
+                            BaseHologramManager.removeHologram(baseIdToRemove);
+                            BaseRegionManager.removeBaseRegion(baseIdToRemove, world);
                             player.sendMessage(ChatColor.GREEN + "Base '" + baseIdToRemove + "' đã được xóa thành công.");
                         } else {
-                            player.sendMessage(ChatColor.RED + "Không thể xóa base '" + baseIdToRemove + "'. Có thể base không tồn tại.");
+                            player.sendMessage(ChatColor.RED + "Không thể xóa base '" + baseIdToRemove + "'.");
                         }
+
                         return true;
                     }
+
 
                     player.sendMessage(ChatColor.RED + "Sử dụng: /guilds admin base <pos1|pos2|claim|remove>");
                     break;
@@ -595,69 +652,90 @@ public class GuildCommands implements CommandExecutor {
                     if ((base.owner == null || base.owner.isEmpty()) &&
                             GuildManager.isInside(playerLoc, base.pos1, base.pos2)) {
 
-                        // Cập nhật dữ liệu base
+                        String baseId = entry.getKey();
+
+                        // Tạm gán (chưa lưu)
                         base.owner = player.getName();
                         base.guildName = g.getName();
-                        g.setBaseID(entry.getKey());
+                        g.setBaseID(baseId);
 
-                        if (!guildManager.saveBaseData(allBases, player)) {
-                            player.sendMessage("§cLỗi khi lưu dữ liệu base.");
-                            return true;
-                        }
-
-                        // Tạo WorldGuard region cho base
-                        if (!BaseRegionManager.createBaseRegion(entry.getKey(), base.pos1, base.pos2, g, player.getWorld())) {
+                        // Tạo region
+                        if (!BaseRegionManager.createBaseRegion(baseId, base.pos1, base.pos2, g, player.getWorld())) {
                             player.sendMessage("§cLỗi khi tạo region bảo vệ cho base.");
-                            // Rollback dữ liệu base nếu tạo region thất bại
                             base.owner = null;
                             base.guildName = null;
-                            guildManager.saveBaseData(allBases, player);
+                            g.setBaseID(null);
                             return true;
                         }
 
-                        // Tính trung tâm vùng
+                        // Tính center và paste schematic
                         Location center = guildManager.getCenter(base.pos1, base.pos2);
-                        if (center != null) {
-                            File schematicFile = new File(plugin.getDataFolder(), "schem/basetest01.schem");
-                            ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
-                            if (format == null) {
-                                player.sendMessage("§cKhông xác định được định dạng schematic.");
-                                return true;
-                            }
-
-                            try (ClipboardReader reader = format.getReader(new FileInputStream(schematicFile))) {
-                                Clipboard clipboard = reader.read();
-
-                                int width = clipboard.getRegion().getWidth();
-                                int height = clipboard.getRegion().getHeight();
-                                int length = clipboard.getRegion().getLength();
-
-                                Location pasteLocation = center.clone().subtract(width / 2, 0, length / 2);
-
-                                String baseIdForPaste = entry.getKey();
-                                guildManager.pasteSchematicAtBase(plugin, baseIdForPaste, "basetest01.schem");
-
-                                Location holoLoc = center.clone().add(0, 2, 0);
-                                BaseHologramManager.createClaimedBaseHologram(entry.getKey(), holoLoc, g.getName(), g.getLevel());
-
-                            } catch (IOException e) {
-                                player.sendMessage("§cLỗi khi đọc schematic.");
-                                e.printStackTrace();
-                                return true;
-                            }
+                        if (center == null) {
+                            player.sendMessage("§cKhông tính được trung tâm base.");
+                            base.owner = null;
+                            base.guildName = null;
+                            g.setBaseID(null);
+                            BaseRegionManager.removeBaseRegion(baseId, player.getWorld());
+                            return true;
                         }
 
+                        File schematicFile = new File(plugin.getDataFolder(), "schem/baseb1.schem");
+                        ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
+                        if (format == null) {
+                            player.sendMessage("§cKhông xác định được định dạng schematic.");
+                            base.owner = null;
+                            base.guildName = null;
+                            g.setBaseID(null);
+                            BaseRegionManager.removeBaseRegion(baseId, player.getWorld());
+                            return true;
+                        }
+
+                        try (ClipboardReader reader = format.getReader(new FileInputStream(schematicFile))) {
+                            Clipboard clipboard = reader.read();
+
+                            int width = clipboard.getRegion().getWidth();
+                            int length = clipboard.getRegion().getLength();
+
+                            Location pasteLocation = center.clone().subtract(width / 2, 0, length / 2);
+
+                            // Paste schematic
+                            guildManager.pasteSchematicAtBase(player, plugin, baseId, "baseb1.schem");
+
+                            // Tạo hologram
+                            Location holoLoc = center.clone().add(0, 2, 0);
+                            BaseHologramManager.createClaimedBaseHologram(baseId, holoLoc, g.getName(), g.getLevel());
+
+                        } catch (IOException e) {
+                            player.sendMessage("§cLỗi khi đọc schematic.");
+                            e.printStackTrace();
+                            base.owner = null;
+                            base.guildName = null;
+                            g.setBaseID(null);
+                            BaseRegionManager.removeBaseRegion(baseId, player.getWorld());
+                            return true;
+                        }
+
+                        // ✅ Mọi thứ thành công → giờ mới lưu
+                        if (!guildManager.saveBaseData(allBases, player)) {
+                            player.sendMessage("§cLỗi khi lưu dữ liệu base.");
+                            base.owner = null;
+                            base.guildName = null;
+                            g.setBaseID(null);
+                            BaseRegionManager.removeBaseRegion(baseId, player.getWorld());
+                            return true;
+                        }
+
+                        player.sendMessage("§aBạn đã chiếm base thành công cho guild '" + g.getName() + "'.");
+                        player.sendMessage("§aRegion bảo vệ đã được tạo! Không có PvP trong khu vực này.");
                         claimed = true;
                         break;
                     }
                 }
 
-                if (claimed) {
-                    player.sendMessage("§aBạn đã chiếm base thành công cho guild '" + g.getName() + "'.");
-                    player.sendMessage("§aRegion bảo vệ đã được tạo! Không có PvP trong khu vực này.");
-                } else {
+                if (!claimed) {
                     player.sendMessage("§cKhông có base trống nào ở vị trí bạn đang đứng.");
                 }
+
                 return true;
 
             // Thêm vào switch case của command handler
@@ -729,7 +807,7 @@ public class GuildCommands implements CommandExecutor {
                 try {
                     // Paste schematic level mới
                     String schematicName = guildManager.getSchematicForLevel(nextLevel);
-                    BlockVector3 size = guildManager.pasteSchematicAtBase(plugin, baseId, schematicName);
+                    BlockVector3 size = guildManager.pasteSchematicAtBase(player, plugin, baseId, schematicName);
 
                     // Cập nhật level trong database
                     guildManager.updateBaseLevel(baseId, nextLevel);

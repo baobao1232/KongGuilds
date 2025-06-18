@@ -120,7 +120,8 @@ public class BaseHologramManager {
         for (Map.Entry<String, BaseData.BaseClaim> entry : bases.entrySet()) {
             String baseId = entry.getKey();
             BaseData.BaseClaim baseClaim = entry.getValue();
-            Location location = baseClaim.getLocation();
+            Location location = baseClaim.getHologramLocation();
+
 
             if (location == null) {
                 Bukkit.getLogger().warning("[BaseHologram] Không thể tạo hologram: base " + baseId + " không có location.");
@@ -136,5 +137,6 @@ public class BaseHologramManager {
 
         Bukkit.getLogger().info("[BaseHologram] Đã load lại tất cả hologram base.");
     }
+
 
 }

@@ -12,9 +12,12 @@ import com.sk89q.worldedit.extent.clipboard.io.ClipboardReader;
 import com.sk89q.worldedit.function.operation.Operation;
 import com.sk89q.worldedit.function.operation.Operations;
 import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.session.ClipboardHolder;
 import com.sk89q.worldedit.world.block.BaseBlock;
+import com.sk89q.worldedit.world.block.BlockStateHolder;
+import com.sk89q.worldedit.world.block.BlockTypes;
 import eu.decentsoftware.holograms.api.holograms.Hologram;
 import king.kongguilds.Base.BaseData;
 import king.kongguilds.Model.Guild;
@@ -408,14 +411,17 @@ public class GuildManager {
 
         double xMin = Math.min(pos1.getX(), pos2.getX());
         double xMax = Math.max(pos1.getX(), pos2.getX());
+        double yMin = Math.min(pos1.getY(), pos2.getY());
+        double yMax = Math.max(pos1.getY(), pos2.getY());
         double zMin = Math.min(pos1.getZ(), pos2.getZ());
         double zMax = Math.max(pos1.getZ(), pos2.getZ());
 
         return (point.getX() >= xMin && point.getX() <= xMax) &&
+                (point.getY() >= yMin && point.getY() <= yMax) &&
                 (point.getZ() >= zMin && point.getZ() <= zMax);
     }
 
-    public static BlockVector3 pasteSchematicAtBase(JavaPlugin plugin, String baseId, String fileName) {
+    public static BlockVector3 pasteSchematicAtBase(Player player, JavaPlugin plugin, String baseId, String fileName) {
         Bukkit.getLogger().info("[DEBUG] Bắt đầu paste schematic tại base: " + baseId);
 
         try {
@@ -445,7 +451,7 @@ public class GuildManager {
             Location centerLocation = new Location(world, centerX, centerY, centerZ);
 
             // Gọi phương thức paste schematic
-            return pasteSchematicAtLocation(plugin, centerLocation, fileName);
+            return pasteSchematicAtLocation(player, plugin, centerLocation, fileName);
 
         } catch (Exception e) {
             Bukkit.getLogger().severe("[ERROR] Lỗi khi paste schematic tại base: " + e.getMessage());
@@ -454,7 +460,7 @@ public class GuildManager {
         }
     }
 
-    public static BlockVector3 pasteSchematicAtLocation(JavaPlugin plugin, Location centerLocation, String fileName) {
+    public static BlockVector3 pasteSchematicAtLocation(Player player, JavaPlugin plugin, Location centerLocation, String fileName) {
         Bukkit.getLogger().info("[DEBUG] Bắt đầu paste schematic: " + fileName);
         Bukkit.getLogger().info("[DEBUG] Tại vị trí: " + centerLocation.getX() + ", " + centerLocation.getY() + ", " + centerLocation.getZ());
 
@@ -518,12 +524,13 @@ public class GuildManager {
             int offsetZ = schematicCenter.getZ() - min.getZ();
 
             // Nếu bị lệch về west 1 block, +1 vào X
-            BlockVector3 pasteLocation = BlockVector3.at(
-                    (int) Math.floor(centerLocation.getX()) - offsetX,
-                    (int) Math.floor(centerLocation.getY()) - offsetY,
-                    (int) Math.floor(centerLocation.getZ()) - offsetZ + 3
-            );
+            Location playerLoc = player.getLocation(); // vị trí hiện tại
 
+            BlockVector3 pasteLocation = BlockVector3.at(
+                    (int) Math.floor(centerLocation.getX()),
+                    (int) playerLoc.getY(),
+                    (int) Math.floor(centerLocation.getZ())
+            );
 
             Bukkit.getLogger().info("[DEBUG] Offset X,Y,Z: " + offsetX + ", " + offsetY + ", " + offsetZ);
 
@@ -555,31 +562,31 @@ public class GuildManager {
     }
 
     // Thêm method để có thể điều chỉnh offset Y nếu cần
-    public static BlockVector3 pasteSchematicAtLocationWithOffset(JavaPlugin plugin, Location centerLocation, String fileName, int yOffset) {
-        Bukkit.getLogger().info("[DEBUG] Bắt đầu paste schematic với Y offset: " + yOffset);
-
-        // Điều chỉnh centerLocation với offset Y
-        Location adjustedLocation = centerLocation.clone();
-        adjustedLocation.setY(centerLocation.getY() + yOffset);
-
-        return pasteSchematicAtLocation(plugin, adjustedLocation, fileName);
-    }
+//    public static BlockVector3 pasteSchematicAtLocationWithOffset(JavaPlugin plugin, Location centerLocation, String fileName, int yOffset) {
+//        Bukkit.getLogger().info("[DEBUG] Bắt đầu paste schematic với Y offset: " + yOffset);
+//
+//        // Điều chỉnh centerLocation với offset Y
+//        Location adjustedLocation = centerLocation.clone();
+//        adjustedLocation.setY(centerLocation.getY() + yOffset);
+//
+//        return pasteSchematicAtLocation(player, plugin, adjustedLocation, fileName);
+//    }
 
     // Method paste tại vị trí player đứng (thay vì center của base)
-    public static BlockVector3 pasteSchematicAtPlayer(JavaPlugin plugin, Player player, String fileName) {
-        Bukkit.getLogger().info("[DEBUG] Paste schematic tại vị trí player: " + player.getName());
-
-        Location playerLocation = player.getLocation();
-        // Căn chỉnh vào center của block
-        Location centerLocation = new Location(
-                playerLocation.getWorld(),
-                Math.floor(playerLocation.getX()) + 0.5,
-                Math.floor(playerLocation.getY()),
-                Math.floor(playerLocation.getZ()) + 0.5
-        );
-
-        return pasteSchematicAtLocation(plugin, centerLocation, fileName);
-    }
+//    public static BlockVector3 pasteSchematicAtPlayer(JavaPlugin plugin, Player player, String fileName) {
+//        Bukkit.getLogger().info("[DEBUG] Paste schematic tại vị trí player: " + player.getName());
+//
+//        Location playerLocation = player.getLocation();
+//        // Căn chỉnh vào center của block
+//        Location centerLocation = new Location(
+//                playerLocation.getWorld(),
+//                Math.floor(playerLocation.getX()) + 0.5,
+//                Math.floor(playerLocation.getY()),
+//                Math.floor(playerLocation.getZ()) + 0.5
+//        );
+//
+//        return pasteSchematicAtLocation(plugin, centerLocation, fileName);
+//    }
 
 
 
@@ -765,5 +772,64 @@ public class GuildManager {
 
         clearItemRequest(g.getName(), item);
     }
+
+    public static boolean clearBaseArea(JavaPlugin plugin, String baseId) {
+        try {
+            Map<String, BaseData.BaseClaim> bases = BaseData.loadBases();
+            BaseData.BaseClaim base = bases.get(baseId);
+
+            if (base == null) {
+                Bukkit.getLogger().warning("Không tìm thấy base với ID: " + baseId);
+                return false;
+            }
+
+            Location pos1 = base.pos1;
+            Location pos2 = base.pos2;
+
+            if (pos1 == null || pos2 == null || pos1.getWorld() == null || pos2.getWorld() == null) {
+                Bukkit.getLogger().warning("Dữ liệu tọa độ hoặc world bị thiếu cho base: " + baseId);
+                return false;
+            }
+
+            World world = pos1.getWorld();
+            com.sk89q.worldedit.world.World weWorld = FaweAPI.getWorld(world.getName());
+            if (weWorld == null) {
+                Bukkit.getLogger().warning("Không thể lấy WorldEdit world cho: " + world.getName());
+                return false;
+            }
+
+            BlockVector3 min = BlockVector3.at(
+                    Math.min(pos1.getBlockX(), pos2.getBlockX()),
+                    Math.min(pos1.getBlockY(), pos2.getBlockY()),
+                    Math.min(pos1.getBlockZ(), pos2.getBlockZ())
+            );
+
+            BlockVector3 max = BlockVector3.at(
+                    Math.max(pos1.getBlockX(), pos2.getBlockX()),
+                    Math.max(pos1.getBlockY(), pos2.getBlockY()) + 20, // 🔺 Tăng Y thêm 20 block
+                    Math.max(pos1.getBlockZ(), pos2.getBlockZ())
+            );
+
+            CuboidRegion region = new CuboidRegion(weWorld, min, max);
+
+            Bukkit.getLogger().info("[BaseClear] Xoá vùng base '" + baseId + "': " + min + " -> " + max);
+
+            try (EditSession editSession = WorldEdit.getInstance().newEditSession(weWorld)) {
+                editSession.setFastMode(true);
+                editSession.setReorderMode(EditSession.ReorderMode.MULTI_STAGE);
+
+                editSession.setBlocks(region, BlockTypes.AIR.getDefaultState());
+            }
+
+            Bukkit.getLogger().info("[BaseClear] Đã xoá thành công công trình trong base '" + baseId + "'");
+            return true;
+
+        } catch (Exception e) {
+            Bukkit.getLogger().severe("[BaseClear] Lỗi khi xoá base: " + baseId);
+            e.printStackTrace();
+            return false;
+        }
+    }
+
 
 }

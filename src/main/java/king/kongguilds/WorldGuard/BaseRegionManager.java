@@ -111,7 +111,6 @@ public class BaseRegionManager {
             // Thiết lập flags
             try {
                 region.setFlag(Flags.PVP, StateFlag.State.DENY);
-                region.setFlag(Flags.BUILD, StateFlag.State.ALLOW);
                 region.setFlag(Flags.INTERACT, StateFlag.State.ALLOW);
                 region.setFlag(Flags.USE, StateFlag.State.ALLOW);
                 region.setFlag(Flags.CHEST_ACCESS, StateFlag.State.ALLOW);
