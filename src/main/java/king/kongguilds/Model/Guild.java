@@ -26,6 +26,7 @@ public class Guild {
     private int level = 1;
     private int exp = 0;
     private String baseID = null;
+    private double money = 0.0;
     private transient JavaPlugin plugin;
 
     public Guild(String name, UUID leader, JavaPlugin plugin) {
@@ -65,6 +66,24 @@ public class Guild {
 
     public int getLevel() {
         return level;
+    }
+
+    public double getMoney() { return money; }
+
+    public void setMoney(double money) { this.money = money; }
+
+    public void addMoney(double amount) {
+        if (amount > 0) {
+            this.money += amount;
+        }
+    }
+
+    public boolean withdrawMoney(double amount) {
+        if (amount > 0 && this.money >= amount) {
+            this.money -= amount;
+            return true;
+        }
+        return false;
     }
 
     public int getExp() {

@@ -1,6 +1,5 @@
 package king.kongguilds.License;
 
-import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -95,4 +94,5 @@ public class LicenseManager {
             return false;
         }
     }
+
 }

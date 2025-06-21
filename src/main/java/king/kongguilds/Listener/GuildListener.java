@@ -11,12 +11,17 @@ import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
@@ -71,6 +76,7 @@ public class GuildListener implements Listener {
 
         int totalPoints = 0;
         Inventory storage = guild.getSharedStorageInventory();
+        List<ItemStack> returnItems = new ArrayList<>(); // <-- danh sách item trả lại
 
         for (ItemStack item : e.getInventory().getContents()) {
             if (item == null || item.getType().isAir()) continue;
@@ -80,10 +86,10 @@ public class GuildListener implements Listener {
             ItemMeta meta = item.getItemMeta();
             if (meta == null) {
                 Bukkit.getLogger().info("[DonateDebug] -> Bỏ qua: Không có ItemMeta");
+                returnItems.add(item); // <-- đẩy về vì không có meta
                 continue;
             }
 
-            // Debug PDC keys
             for (NamespacedKey key : meta.getPersistentDataContainer().getKeys()) {
                 Bukkit.getLogger().info("[DonateDebug] -> PDC key: " + key);
             }
@@ -95,6 +101,7 @@ public class GuildListener implements Listener {
 
             if (Double.isNaN(value) || value <= 0) {
                 Bukkit.getLogger().info("[DonateDebug] -> Bỏ qua: Item không có giá trị");
+                returnItems.add(item); // <-- đẩy về nếu item không có giá trị
                 continue;
             }
 
@@ -106,6 +113,11 @@ public class GuildListener implements Listener {
             storage.addItem(item.clone());
         }
 
+        // Đẩy item không hợp lệ về inventory người chơi
+        for (ItemStack i : returnItems) {
+            player.getInventory().addItem(i);
+        }
+
         // Cập nhật điểm cho player
         if (totalPoints > 0) {
             guildManager.updateMemberPoints(guild.getName(), player.getUniqueId(), totalPoints);
@@ -115,8 +127,6 @@ public class GuildListener implements Listener {
             player.sendMessage("§cBạn chưa donate vật phẩm nào có giá trị.");
         }
     }
-
-
 
     // ---------- MỞ GUI CHỈNH THÀNH VIÊN ----------
 
@@ -341,9 +351,43 @@ public class GuildListener implements Listener {
         Guild guild = guildManager.getPlayerGuild(player);
         if (guild == null) return;
 
-        event.setCancelled(true); // huỷ chat bình thường
+        event.setCancelled(true); // huỷ chat global
+
         String message = event.getMessage();
-        guildManager.sendGuildMessage(guild, player, message);
+
+        // Gọi hàm mới: không cần truyền format
+        guildManager.sendGuildMessage(plugin, guild, player, message);
     }
 
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void clckRuongBase(PlayerInteractEvent event) {
+
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+        if (event.getClickedBlock() == null) return;
+
+        Block clickedBlock = event.getClickedBlock();
+        Material type = clickedBlock.getType();
+
+        // Chỉ xử lý khi player click vào chest
+        if (type != Material.CHEST && type != Material.TRAPPED_CHEST) return;
+
+        Player player = event.getPlayer();
+        Guild guild = guildManager.getPlayerGuild(player);
+        // Kiểm tra xem player có đứng trong base của chính guild mình không
+        if (guildManager.isPlayerInTheirOwnBase(player)) {
+            event.setCancelled(true); // Ngăn mở chest mặc định
+
+            player.sendMessage("§aBạn đã mở kho donate của guild!");
+
+            // Mở GUI tùy chỉnh, ví dụ GUI donate
+            UUID locker = guildManager.getGuildStorageLocker(guild.getName());
+            if (locker != null && !locker.equals(player.getUniqueId())) {
+                player.sendMessage(messageManager.getMessage("member", "storage_locked"));
+                return;
+            }
+
+            guildManager.lockGuildStorage(guild.getName(), player.getUniqueId());
+            player.openInventory(guild.getSharedStorageInventory());
+        }
+    }
 }

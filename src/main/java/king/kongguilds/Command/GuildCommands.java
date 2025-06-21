@@ -260,7 +260,7 @@ public class GuildCommands implements CommandExecutor {
                     }
                     // Reload config, guilds, messages
                     try {
-                        guildManager.loadGuilds(); // Reload guilds từ file (bạn phải chắc GuildManager có method này)
+                        guildManager.asyncLoadGuilds(); // Reload guilds từ file (bạn phải chắc GuildManager có method này)
                         messageManager.load(new File(plugin.getDataFolder(), "messages.yml"));
                         player.sendMessage(ChatColor.GREEN + "§aPlugin đã được reload thành công!");
                     } catch (IOException e) {
@@ -351,7 +351,7 @@ public class GuildCommands implements CommandExecutor {
                             Location pasteLocation = center.clone().subtract(width / 2, 0, length / 2);
 
                             // Paste schematic
-                            guildManager.pasteSchematicAtBase(player, plugin, id, "baseb0.schem");
+                            guildManager.pasteSchematicAtBaseAsync(player, plugin, id, "baseb0.schem");
 
                         } catch (IOException e) {
                             player.sendMessage("§cLỗi khi đọc schematic.");
@@ -394,7 +394,7 @@ public class GuildCommands implements CommandExecutor {
                             return true;
                         }
 
-                        guildManager.clearBaseArea(plugin, baseIdToRemove);
+                        guildManager.clearBaseAreaAsync(plugin, baseIdToRemove, base);
                         boolean result = BaseData.removeBaseById(baseIdToRemove);
 
                         if (result) {
@@ -564,6 +564,26 @@ public class GuildCommands implements CommandExecutor {
 
                 player.sendMessage(messageManager.getMessage("member", "disband_success", Map.of("guild", nameToRemove)));
                 break;
+            case "donate":
+
+                if (guild == null) {
+                    player.sendMessage("§cBạn chưa tham gia guild nào.");
+                    return true;
+                }
+
+                if (guild.getBaseID() == null || BaseData.getBaseClaim(guild.getBaseID()) == null) {
+                    player.sendMessage("§cGuild của bạn chưa sở hữu base nào.");
+                    return true;
+                }
+
+                if (!guildManager.isPlayerInTheirOwnBase(player)) {
+                    player.sendMessage("§cBạn phải đứng trong base của guild mình để donate.");
+                    return true;
+                }
+
+                // Nếu tất cả điều kiện đều đúng → mở donate GUI
+                GuildGUI.openDonateGUI(player);
+                break;
 
             case "storage":
                 Guild guildForStorage = guildManager.getPlayerGuild(player);
@@ -602,7 +622,11 @@ public class GuildCommands implements CommandExecutor {
                 }
 
                 String message = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
-                guildManager.sendGuildMessage(guild, player, message);
+
+                // Format mẫu: "{rank} {player}: {message}"
+                String format = "{rank} {player}: {message}";
+
+                guildManager.sendGuildMessage(plugin, guild, player, message);
                 break;
 
             case "base":
@@ -680,8 +704,8 @@ public class GuildCommands implements CommandExecutor {
                         }
 
                         File schematicFile = new File(plugin.getDataFolder(), "schem/baseb1.schem");
-                        ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
-                        if (format == null) {
+                        ClipboardFormat formatsch = ClipboardFormats.findByFile(schematicFile);
+                        if (formatsch == null) {
                             player.sendMessage("§cKhông xác định được định dạng schematic.");
                             base.owner = null;
                             base.guildName = null;
@@ -690,7 +714,7 @@ public class GuildCommands implements CommandExecutor {
                             return true;
                         }
 
-                        try (ClipboardReader reader = format.getReader(new FileInputStream(schematicFile))) {
+                        try (ClipboardReader reader = formatsch.getReader(new FileInputStream(schematicFile))) {
                             Clipboard clipboard = reader.read();
 
                             int width = clipboard.getRegion().getWidth();
@@ -699,11 +723,12 @@ public class GuildCommands implements CommandExecutor {
                             Location pasteLocation = center.clone().subtract(width / 2, 0, length / 2);
 
                             // Paste schematic
-                            guildManager.pasteSchematicAtBase(player, plugin, baseId, "baseb1.schem");
+                            guildManager.pasteSchematicAtBaseAsync(player, plugin, baseId, "baseb1.schem");
 
                             // Tạo hologram
                             Location holoLoc = center.clone().add(0, 2, 0);
                             BaseHologramManager.createClaimedBaseHologram(baseId, holoLoc, g.getName(), g.getLevel());
+
 
                         } catch (IOException e) {
                             player.sendMessage("§cLỗi khi đọc schematic.");
@@ -760,7 +785,7 @@ public class GuildCommands implements CommandExecutor {
                 try {
                     rankss = Guild.RankType.valueOf(memberInfos.getRank().toUpperCase().replace("-", ""));
                 } catch (IllegalArgumentException e) {
-                    rankss = Guild.RankType.MEMBER; // mặc định nếu không đúng rank
+                    rankss = Guild.RankType.MEMBER;
                 }
 
                 if (rankss != Guild.RankType.LEADER) {
@@ -788,7 +813,6 @@ public class GuildCommands implements CommandExecutor {
                     return true;
                 }
 
-                // Kiểm tra level hiện tại và điều kiện upgrade
                 int currentLevel = playerBase.level;
                 int nextLevel = currentLevel + 1;
 
@@ -797,44 +821,16 @@ public class GuildCommands implements CommandExecutor {
                     return true;
                 }
 
-                // Kiểm tra điều kiện upgrade (ví dụ: tiền, item, thành viên...)
                 if (!guildManager.canUpgradeBase(guild, currentLevel, nextLevel)) {
                     player.sendMessage("§cKhông đủ điều kiện để upgrade base lên level " + nextLevel);
                     guildManager.showUpgradeRequirements(player, nextLevel);
                     return true;
                 }
 
-                try {
-                    // Paste schematic level mới
-                    String schematicName = guildManager.getSchematicForLevel(nextLevel);
-                    BlockVector3 size = guildManager.pasteSchematicAtBase(player, plugin, baseId, schematicName);
-
-                    // Cập nhật level trong database
-                    guildManager.updateBaseLevel(baseId, nextLevel);
-
-                    // Trừ resources cần thiết
-                    guildManager.consumeUpgradeResources(guild, nextLevel);
-
-                    // Cập nhật hologram
-                    Location center = guildManager.getCenter(playerBase.pos1, playerBase.pos2);
-                    if (center != null) {
-                        Location holoLoc = center.clone().add(0, 2, 0);
-                        BaseHologramManager.updateBaseHologram(baseId, holoLoc, guild.getName(), nextLevel);
-                    }
-
-                    player.sendMessage("§a§lUPGRADE THÀNH CÔNG!");
-                    player.sendMessage("§eBased đã được nâng cấp lên level §6" + nextLevel);
-                    player.sendMessage("§7Kích thước schematic: §f" + size.getX() + "x" + size.getY() + "x" + size.getZ());
-
-                    // Thông báo cho toàn guild
-                    guildManager.broadcastToGuild(guild,"§6" + player.getName() + " §ađã nâng cấp base lên level §6" + nextLevel + "§a!");
-
-                } catch (Exception e) {
-                    player.sendMessage("§cLỗi khi upgrade base: " + e.getMessage());
-                    e.printStackTrace();
-                }
-
+                // Gọi upgrade async
+                guildManager.upgradeBaseAsync(player, guild, baseId, nextLevel);
                 return true;
+
 
             default:
                 player.sendMessage(messageManager.getMessage("member", "usage"));

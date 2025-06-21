@@ -2,8 +2,11 @@ package king.kongguilds.Base;
 
 import eu.decentsoftware.holograms.api.DHAPI;
 import eu.decentsoftware.holograms.api.holograms.Hologram;
+import king.kongguilds.Manager.GuildManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.World;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -136,6 +139,67 @@ public class BaseHologramManager {
         }
 
         Bukkit.getLogger().info("[BaseHologram] Đã load lại tất cả hologram base.");
+    }
+
+    public static void createChestHologram(String baseId, String title) {
+        BaseData.BaseClaim base = BaseData.getBaseClaim(baseId);
+        if (base == null || !base.isClaimed()) {
+            Bukkit.getLogger().warning("[ChestHologram] Không thể tạo hologram vì base không tồn tại hoặc chưa được claim: " + baseId);
+            return;
+        }
+
+        Location chestLoc = GuildManager.getFirstChestInBase(base);
+        //Bukkit.getLogger().info("[DEBUG] Base World: " + (world != null ? world.getName() : "null"));
+        Bukkit.getLogger().info("[DEBUG] Pos1: " + base.pos1);
+        Bukkit.getLogger().info("[DEBUG] Pos2: " + base.pos2);
+        if (chestLoc == null) {
+            Bukkit.getLogger().warning("[ChestHologram] Không tìm thấy chest trong base " + baseId);
+            return;
+        }
+
+        String holoId = "chest_" + baseId;
+        Hologram old = DHAPI.getHologram(holoId);
+        if (old != null) {
+            old.delete();
+        }
+
+        Location hologramLoc = chestLoc.clone().add(0.5, 2.5, 0.5); // Hiển thị phía trên chest
+
+        Hologram holo = DHAPI.createHologram(holoId, hologramLoc, List.of(
+                "§a§l" + title,
+                "§7Click để mở",
+                "§a/g donate §7 để donate cho Guild"
+        ));
+
+        holograms.put(holoId, holo);
+    }
+
+    public static void loadAllChestHolograms() {
+        Map<String, BaseData.BaseClaim> bases = BaseData.loadBases();
+
+        for (Map.Entry<String, BaseData.BaseClaim> entry : bases.entrySet()) {
+            String baseId = entry.getKey();
+            BaseData.BaseClaim base = entry.getValue();
+
+            if (!base.isClaimed()) continue;
+            Location center = base.getLocation();
+            if (center != null) {
+                Bukkit.getLogger().info("[DEBUG] Base Center: " + center);
+                Bukkit.getLogger().info("[DEBUG] Highest Y at center: " + center.getWorld().getHighestBlockYAt(center));
+            }
+
+            Location chestLoc = GuildManager.getFirstChestInBase(base);
+            Bukkit.getLogger().info("[DEBUG] Pos1: " + base.pos1);
+            Bukkit.getLogger().info("[DEBUG] Pos2: " + base.pos2);
+
+            if (chestLoc != null) {
+                createChestHologram(baseId, "Kho Guild");
+            } else {
+                Bukkit.getLogger().warning("[BaseHologram] Không tìm thấy chest trong base " + baseId);
+            }
+        }
+
+        Bukkit.getLogger().info("[BaseHologram] Đã load hologram trên chest cho các base.");
     }
 
 

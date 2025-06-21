@@ -15,30 +15,27 @@ import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.session.ClipboardHolder;
-import com.sk89q.worldedit.world.block.BaseBlock;
-import com.sk89q.worldedit.world.block.BlockStateHolder;
 import com.sk89q.worldedit.world.block.BlockTypes;
 import eu.decentsoftware.holograms.api.holograms.Hologram;
 import king.kongguilds.Base.BaseData;
+import king.kongguilds.Base.BaseHologramManager;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.Member;
 import king.kongguilds.Model.TimedInvite;
 import king.kongguilds.WorldGuard.BaseRegionManager;
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.md_5.bungee.api.ChatColor;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import java.io.*;
 import java.util.*;
 
 public class GuildManager {
+    private static GuildManager instance;
     private final JavaPlugin plugin;
     private final Map<String, Guild> guilds = new HashMap<>();
     private final File guildFolder;
@@ -51,18 +48,20 @@ public class GuildManager {
     private final Map<String, List<UUID>> itemRequests = new HashMap<>();
 
     public GuildManager(JavaPlugin plugin, MessageManager messageManager) {
-        this.plugin = plugin; // <- thêm dòng này
+        this.plugin = plugin;
+        instance = this; // Gán instance
         this.messageManager = messageManager;
         this.guildFolder = new File(plugin.getDataFolder(), "Guilds");
         createGuildFolder();
-        loadGuilds();
+        asyncLoadGuilds();
     }
 
+    public static GuildManager getInstance() {
+        return instance;
+    }
 
     private void createGuildFolder() {
-        if (!guildFolder.exists()) {
-            guildFolder.mkdirs();
-        }
+        if (!guildFolder.exists()) guildFolder.mkdirs();
     }
 
     public boolean createGuild(String name, Player leader) {
@@ -82,41 +81,42 @@ public class GuildManager {
     }
 
     public Guild getGuild(String name) {
-        return guilds.get(name);
+        synchronized (guilds) {
+            return guilds.get(name);
+        }
     }
 
     public List<Guild> getAllGuilds() {
-        return new ArrayList<>(guilds.values());
-    }
-
-    public void loadGuilds() {
-        // Tạo Gson với custom UUID adapter
-        Gson gson = new GsonBuilder()
-                .registerTypeAdapter(UUID.class, new UUIDAdapter())
-                .create();
-
-        File[] files = guildFolder.listFiles((dir, name) -> name.endsWith(".json"));
-        if (files != null) {
-            for (File file : files) {
-                try (FileReader reader = new FileReader(file)) {
-                    Guild guild = gson.fromJson(reader, Guild.class);
-
-                    // Kiểm tra và sửa UUID null
-                    validateAndFixGuildUUIDs(guild);
-
-                    guild.setPlugin(plugin); // tạo inventory kho chung
-                    guild.loadSharedStorage(); // load kho chung từ base64
-                    guilds.put(guild.getName(), guild);
-
-                    Bukkit.getLogger().info("Loaded guild: " + guild.getName() +
-                            " with leader UUID: " + guild.getLeader());
-                } catch (IOException e) {
-                    Bukkit.getLogger().warning("Error loading guild from file: " + file.getName());
-                    e.printStackTrace();
-                }
-            }
+        synchronized (guilds) {
+            return new ArrayList<>(guilds.values());
         }
     }
+
+    public void asyncLoadGuilds() {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                File[] files = guildFolder.listFiles((dir, name) -> name.endsWith(".json"));
+                if (files != null) {
+                    for (File file : files) {
+                        try (FileReader reader = new FileReader(file)) {
+                            Guild guild = gson.fromJson(reader, Guild.class);
+                            guild.setPlugin(plugin);
+                            guild.loadSharedStorage();
+                            synchronized (guilds) {
+                                guilds.put(guild.getName(), guild);
+                            }
+                            Bukkit.getLogger().info("[AsyncLoad] Loaded guild: " + guild.getName());
+                        } catch (Exception e) {
+                            Bukkit.getLogger().warning("[AsyncLoad] Failed to load guild from " + file.getName());
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
+        }.runTaskAsynchronously(plugin);
+    }
+
     private void validateAndFixGuildUUIDs(Guild guild) {
         // Fix leader UUID nếu null
         if (guild.getLeader() == null) {
@@ -137,10 +137,10 @@ public class GuildManager {
         }
     }
 
-    public void saveGuild(String name) {
+    public void saveGuildSync(String name) {
         Guild guild = guilds.get(name);
         if (guild != null) {
-            guild.saveSharedStorage(); // cập nhật base64 mới từ inventory
+            guild.saveSharedStorage(); // cập nhật base64
             try (FileWriter writer = new FileWriter(new File(guildFolder, name + ".json"))) {
                 gson.toJson(guild, writer);
             } catch (IOException e) {
@@ -148,6 +148,7 @@ public class GuildManager {
             }
         }
     }
+
 
     public void addMember(String guildName, String playerName, UUID memberId, String rankName, String memberType, int points) {
         Guild guild = getGuild(guildName);
@@ -333,7 +334,7 @@ public class GuildManager {
         Guild guild = getPlayerGuild(player);
         if (guild != null) {
             guild.addExp(amount);
-            saveGuild(guild.getName());
+            saveGuildSync(guild.getName());
         }
     }
 
@@ -360,36 +361,64 @@ public class GuildManager {
         return guildChatMode.contains(uuid);
     }
 
-    public void sendGuildMessage(Guild guild, Player sender, String message) {
+    public String formatGuildChatMessage(Guild guild, Player sender, String message) {
         Member senderInfo = guild.getMembers().get(sender.getUniqueId());
         String rankName = senderInfo != null ? senderInfo.getRank() : "Member";
 
-        String format = messageManager.getMessage("member", "guild_chat_format", Map.of(
-                "player", sender.getName(),
-                "rank", rankName,
-                "message", message
-        ));
-
-        for (UUID memberId : guild.getMembers().keySet()) {
-            Player member = Bukkit.getPlayer(memberId);
-            if (member != null && member.isOnline()) {
-                // Xử lý PlaceholderAPI cho từng người nhận
-                String parsedMessage = PlaceholderAPI.setPlaceholders(member, format);
-                member.sendMessage(parsedMessage);
-            }
-        }
+        String format = "§7[§b{rank}§7] §e{player}§7: §f{message}";
+        return format
+                .replace("{player}", sender.getName())
+                .replace("{rank}", rankName)
+                .replace("{message}", message);
     }
 
-    public void broadcastToGuild(Guild guild, String message) {
-        for (UUID memberId : guild.getMembers().keySet()) {
-            Player member = Bukkit.getPlayer(memberId);
-            if (member != null && member.isOnline()) {
-                // Xử lý PlaceholderAPI cho từng người nhận
-                String parsedMessage = PlaceholderAPI.setPlaceholders(member, message);
-                member.sendMessage(parsedMessage);
+    // ✅ Gửi tin nhắn guild chat đã xử lý placeholder
+    public void sendGuildMessage(JavaPlugin plugin, Guild guild, Player sender, String message) {
+        String formatted = formatGuildChatMessage(guild, sender, message);
+
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (UUID memberId : guild.getMembers().keySet()) {
+                    Player member = Bukkit.getPlayer(memberId);
+                    if (member != null && member.isOnline()) {
+                        String parsed = PlaceholderAPI.setPlaceholders(member, formatted);
+
+                        new BukkitRunnable() {
+                            @Override
+                            public void run() {
+                                member.sendMessage(parsed);
+                            }
+                        }.runTask(plugin);
+                    }
+                }
             }
-        }
+        }.runTaskAsynchronously(plugin);
     }
+
+
+    public void broadcastToGuild(JavaPlugin plugin, Guild guild, String message) {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (UUID memberId : guild.getMembers().keySet()) {
+                    Player member = Bukkit.getPlayer(memberId);
+                    if (member != null && member.isOnline()) {
+                        String parsedMessage = PlaceholderAPI.setPlaceholders(member, message);
+
+                        // Gửi trong main thread
+                        new BukkitRunnable() {
+                            @Override
+                            public void run() {
+                                member.sendMessage(parsedMessage);
+                            }
+                        }.runTask(plugin);
+                    }
+                }
+            }
+        }.runTaskAsynchronously(plugin);
+    }
+
 
     public boolean isInGuildChat(UUID playerId) {
         return guildChatMode.contains(playerId);
@@ -421,144 +450,105 @@ public class GuildManager {
                 (point.getZ() >= zMin && point.getZ() <= zMax);
     }
 
-    public static BlockVector3 pasteSchematicAtBase(Player player, JavaPlugin plugin, String baseId, String fileName) {
-        Bukkit.getLogger().info("[DEBUG] Bắt đầu paste schematic tại base: " + baseId);
+    public static void pasteSchematicAtBaseAsync(Player player, JavaPlugin plugin, String baseId, String fileName) {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                try {
+                    Map<String, BaseData.BaseClaim> bases = BaseData.loadBases();
+                    BaseData.BaseClaim baseClaim = bases.get(baseId);
 
-        try {
-            // Đọc dữ liệu base từ file JSON
-            Map<String, BaseData.BaseClaim> bases = BaseData.loadBases();
-            BaseData.BaseClaim baseClaim = bases.get(baseId);
+                    if (baseClaim == null) {
+                        throw new IllegalArgumentException("Không tìm thấy base với ID: " + baseId);
+                    }
 
-            if (baseClaim == null) {
-                throw new IllegalArgumentException("Không tìm thấy base với ID: " + baseId);
-            }
+                    double centerX = (baseClaim.pos1.getX() + baseClaim.pos2.getX()) / 2.0;
+                    double centerY = (baseClaim.pos1.getY() + baseClaim.pos2.getY()) / 2.0;
+                    double centerZ = (baseClaim.pos1.getZ() + baseClaim.pos2.getZ()) / 2.0;
 
-            // Tính toán center của base từ pos1 và pos2
-            double centerX = (baseClaim.pos1.getX() + baseClaim.pos2.getX()) / 2.0;
-            double centerY = (baseClaim.pos1.getY() + baseClaim.pos2.getY()) / 2.0;
-            double centerZ = (baseClaim.pos1.getZ() + baseClaim.pos2.getZ()) / 2.0;
+                    World world = baseClaim.pos1.getWorld();
+                    if (world == null) {
+                        throw new IllegalArgumentException("World không tồn tại: " + baseClaim.pos1.getWorld().getName());
+                    }
 
-            Bukkit.getLogger().info("[DEBUG] Base pos1: " + baseClaim.pos1.getX() + ", " + baseClaim.pos1.getY() + ", " + baseClaim.pos1.getZ());
-            Bukkit.getLogger().info("[DEBUG] Base pos2: " + baseClaim.pos2.getX() + ", " + baseClaim.pos2.getY() + ", " + baseClaim.pos2.getZ());
-            Bukkit.getLogger().info("[DEBUG] Base center: " + centerX + ", " + centerY + ", " + centerZ);
+                    Location centerLocation = new Location(world, centerX, centerY, centerZ);
 
-            // Tạo Location tại center của base
-            World world = baseClaim.pos1.getWorld();
-            if (world == null) {
-                throw new IllegalArgumentException("World không tồn tại: " + baseClaim.pos1.getWorld().getName());
-            }
-
-            Location centerLocation = new Location(world, centerX, centerY, centerZ);
-
-            // Gọi phương thức paste schematic
-            return pasteSchematicAtLocation(player, plugin, centerLocation, fileName);
-
-        } catch (Exception e) {
-            Bukkit.getLogger().severe("[ERROR] Lỗi khi paste schematic tại base: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Lỗi khi paste schematic tại base: " + e.getMessage(), e);
-        }
-    }
-
-    public static BlockVector3 pasteSchematicAtLocation(Player player, JavaPlugin plugin, Location centerLocation, String fileName) {
-        Bukkit.getLogger().info("[DEBUG] Bắt đầu paste schematic: " + fileName);
-        Bukkit.getLogger().info("[DEBUG] Tại vị trí: " + centerLocation.getX() + ", " + centerLocation.getY() + ", " + centerLocation.getZ());
-
-        try {
-            File schematicFile = new File(plugin.getDataFolder(), "schem/" + fileName);
-            Bukkit.getLogger().info("[DEBUG] Đường dẫn schematic: " + schematicFile.getAbsolutePath());
-
-            if (!schematicFile.exists() || !schematicFile.isFile()) {
-                throw new IllegalArgumentException("Schematic file không tồn tại: " + schematicFile.getPath());
-            }
-
-            World world = centerLocation.getWorld();
-            if (world == null) {
-                throw new IllegalArgumentException("World không hợp lệ (null)");
-            }
-
-            com.sk89q.worldedit.world.World faweWorld = FaweAPI.getWorld(world.getName());
-            if (faweWorld == null) {
-                throw new IllegalStateException("Không tìm thấy FAWE World cho: " + world.getName());
-            }
-
-            Clipboard clipboard;
-            ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
-            if (format == null) {
-                throw new IllegalArgumentException("Không xác định được định dạng schematic file");
-            }
-
-            try (ClipboardReader reader = format.getReader(new FileInputStream(schematicFile))) {
-                clipboard = reader.read();
-            }
-
-            Region region = clipboard.getRegion();
-            int width = region.getWidth();
-            int height = region.getHeight();
-            int length = region.getLength();
-
-            Bukkit.getLogger().info("[DEBUG] Kích thước schematic: " + width + "x" + height + "x" + length);
-
-            // Kiểm tra số block không phải air
-            int nonAirBlocks = 0;
-            for (BlockVector3 point : region) {
-                BaseBlock block = clipboard.getFullBlock(point);
-                if (!block.getBlockType().getId().equals("minecraft:air")) {
-                    nonAirBlocks++;
+                    // Gọi paste async
+                    pasteSchematicAtLocationAsync(player, plugin, centerLocation, fileName);
+                } catch (Exception e) {
+                    Bukkit.getLogger().severe("[ERROR] Lỗi khi paste schematic tại base: " + e.getMessage());
+                    e.printStackTrace();
                 }
             }
-            Bukkit.getLogger().info("[DEBUG] Số block không phải air: " + nonAirBlocks);
+        }.runTaskAsynchronously(plugin);
+    }
 
-            // Tính center thực sự của schematic (bao gồm cả Y)
-            BlockVector3 min = region.getMinimumPoint();
-            BlockVector3 max = region.getMaximumPoint();
+    public static void pasteSchematicAtLocationAsync(Player player, JavaPlugin plugin, Location centerLocation, String fileName) {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                try {
+                    File schematicFile = new File(plugin.getDataFolder(), "schem/" + fileName);
+                    if (!schematicFile.exists()) {
+                        throw new IllegalArgumentException("Schematic file không tồn tại: " + schematicFile.getPath());
+                    }
 
-            BlockVector3 schematicCenter = BlockVector3.at(
-                    (min.getBlockX() + max.getBlockX()) / 2,
-                    (min.getBlockY() + max.getBlockY()) / 2,
-                    (min.getBlockZ() + max.getBlockZ()) / 2
-            );
+                    World world = centerLocation.getWorld();
+                    if (world == null) throw new IllegalArgumentException("World không hợp lệ");
 
-            int offsetX = schematicCenter.getX() - min.getX();
-            int offsetY = schematicCenter.getY() - min.getY();
-            int offsetZ = schematicCenter.getZ() - min.getZ();
+                    com.sk89q.worldedit.world.World weWorld = FaweAPI.getWorld(world.getName());
 
-            // Nếu bị lệch về west 1 block, +1 vào X
-            Location playerLoc = player.getLocation(); // vị trí hiện tại
+                    if (weWorld == null) throw new IllegalStateException("Không tìm thấy FAWE World");
 
-            BlockVector3 pasteLocation = BlockVector3.at(
-                    (int) Math.floor(centerLocation.getX()),
-                    (int) playerLoc.getY(),
-                    (int) Math.floor(centerLocation.getZ())
-            );
+                    ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
+                    if (format == null) throw new IllegalArgumentException("Không xác định định dạng schematic");
 
-            Bukkit.getLogger().info("[DEBUG] Offset X,Y,Z: " + offsetX + ", " + offsetY + ", " + offsetZ);
+                    Clipboard clipboard;
+                    try (ClipboardReader reader = format.getReader(new FileInputStream(schematicFile))) {
+                        clipboard = reader.read();
+                    }
 
-            Bukkit.getLogger().info("[DEBUG] Min point: " + min);
-            Bukkit.getLogger().info("[DEBUG] Max point: " + max);
-            Bukkit.getLogger().info("[DEBUG] Schematic center: " + schematicCenter);
-            Bukkit.getLogger().info("[DEBUG] Base center location: " + centerLocation.getX() + ", " + centerLocation.getY() + ", " + centerLocation.getZ());
-            Bukkit.getLogger().info("[DEBUG] Final paste location: " + pasteLocation);
+                    Region region = clipboard.getRegion();
+                    BlockVector3 min = region.getMinimumPoint();
+                    BlockVector3 max = region.getMaximumPoint();
+                    BlockVector3 schematicCenter = BlockVector3.at(
+                            (min.getBlockX() + max.getBlockX()) / 2,
+                            (min.getBlockY() + max.getBlockY()) / 2,
+                            (min.getBlockZ() + max.getBlockZ()) / 2
+                    );
 
-            try (EditSession editSession = WorldEdit.getInstance().newEditSession(faweWorld)) {
-                ClipboardHolder clipboardHolder = new ClipboardHolder(clipboard);
-                Operation operation = clipboardHolder
-                        .createPaste(editSession)
-                        .to(pasteLocation)
-                        .ignoreAirBlocks(false)
-                        .build();
+                    Location playerLoc = player.getLocation();
+                    BlockVector3 pasteLocation = BlockVector3.at(
+                            (int) Math.floor(centerLocation.getX()),
+                            (int) playerLoc.getY(),
+                            (int) Math.floor(centerLocation.getZ())
+                    );
 
-                Operations.complete(operation);
-                Bukkit.getLogger().info("[DEBUG] Paste schematic thành công tại base center!");
+                    new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            try (EditSession editSession = WorldEdit.getInstance().newEditSession(weWorld)) {
+                                ClipboardHolder clipboardHolder = new ClipboardHolder(clipboard);
+                                Operation operation = clipboardHolder.createPaste(editSession)
+                                        .to(pasteLocation)
+                                        .ignoreAirBlocks(false)
+                                        .build();
+
+                                Operations.complete(operation);
+                                Bukkit.getLogger().info("[Schematic] Pasted thành công tại: " + pasteLocation);
+                            } catch (Exception e) {
+                                Bukkit.getLogger().severe("[Schematic] Lỗi khi paste: " + e.getMessage());
+                                e.printStackTrace();
+                            }
+                        }
+                    }.runTask(plugin);
+
+                } catch (Exception e) {
+                    Bukkit.getLogger().severe("[Schematic] Lỗi async: " + e.getMessage());
+                    e.printStackTrace();
+                }
             }
-
-            return BlockVector3.at(width, height, length);
-
-        } catch (Exception e) {
-            Bukkit.getLogger().severe("[ERROR] Lỗi khi paste schematic: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Lỗi khi xử lý schematic file: " + e.getMessage(), e);
-        }
+        }.runTaskAsynchronously(plugin);
     }
 
     // Thêm method để có thể điều chỉnh offset Y nếu cần
@@ -773,63 +763,271 @@ public class GuildManager {
         clearItemRequest(g.getName(), item);
     }
 
-    public static boolean clearBaseArea(JavaPlugin plugin, String baseId) {
-        try {
-            Map<String, BaseData.BaseClaim> bases = BaseData.loadBases();
-            BaseData.BaseClaim base = bases.get(baseId);
+    public static void clearBaseAreaAsync(JavaPlugin plugin, String baseId, BaseData.BaseClaim base) {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (base == null || base.pos1 == null || base.pos2 == null || base.pos1.getWorld() == null) {
+                    Bukkit.getLogger().warning("[BaseClear] Debug base: base=" + base +
+                            ", pos1=" + (base != null ? base.pos1 : "null") +
+                            ", pos2=" + (base != null ? base.pos2 : "null") +
+                            ", world=" + (base != null && base.pos1 != null ? base.pos1.getWorld() : "null"));
+                    Bukkit.getLogger().warning("[BaseClear] Dữ liệu base không hợp lệ cho: " + baseId);
+                    return;
+                }
 
-            if (base == null) {
-                Bukkit.getLogger().warning("Không tìm thấy base với ID: " + baseId);
-                return false;
+                World world = base.pos1.getWorld();
+                com.sk89q.worldedit.world.World weWorld = FaweAPI.getWorld(world.getName());
+                if (weWorld == null) {
+                    Bukkit.getLogger().warning("[BaseClear] Không thể lấy FAWE world cho: " + world.getName());
+                    return;
+                }
+
+                BlockVector3 min = BlockVector3.at(
+                        Math.min(base.pos1.getBlockX(), base.pos2.getBlockX()),
+                        Math.min(base.pos1.getBlockY(), base.pos2.getBlockY()),
+                        Math.min(base.pos1.getBlockZ(), base.pos2.getBlockZ())
+                );
+
+                BlockVector3 max = BlockVector3.at(
+                        Math.max(base.pos1.getBlockX(), base.pos2.getBlockX()),
+                        Math.max(base.pos1.getBlockY(), base.pos2.getBlockY()) + 20,
+                        Math.max(base.pos1.getBlockZ(), base.pos2.getBlockZ())
+                );
+
+                CuboidRegion region = new CuboidRegion(weWorld, min, max);
+
+                new BukkitRunnable() {
+                    @Override
+                    public void run() {
+                        try (EditSession editSession = WorldEdit.getInstance().newEditSession(weWorld)) {
+                            editSession.setFastMode(true);
+                            editSession.setReorderMode(EditSession.ReorderMode.MULTI_STAGE);
+                            editSession.setBlocks(region, BlockTypes.AIR.getDefaultState());
+                            Bukkit.getLogger().info("[BaseClear] Đã xoá thành công công trình trong base '" + baseId + "'");
+                        } catch (Exception e) {
+                            Bukkit.getLogger().severe("[BaseClear] Lỗi khi xoá base: " + baseId);
+                            e.printStackTrace();
+                        }
+                    }
+                }.runTask(plugin);
             }
-
-            Location pos1 = base.pos1;
-            Location pos2 = base.pos2;
-
-            if (pos1 == null || pos2 == null || pos1.getWorld() == null || pos2.getWorld() == null) {
-                Bukkit.getLogger().warning("Dữ liệu tọa độ hoặc world bị thiếu cho base: " + baseId);
-                return false;
-            }
-
-            World world = pos1.getWorld();
-            com.sk89q.worldedit.world.World weWorld = FaweAPI.getWorld(world.getName());
-            if (weWorld == null) {
-                Bukkit.getLogger().warning("Không thể lấy WorldEdit world cho: " + world.getName());
-                return false;
-            }
-
-            BlockVector3 min = BlockVector3.at(
-                    Math.min(pos1.getBlockX(), pos2.getBlockX()),
-                    Math.min(pos1.getBlockY(), pos2.getBlockY()),
-                    Math.min(pos1.getBlockZ(), pos2.getBlockZ())
-            );
-
-            BlockVector3 max = BlockVector3.at(
-                    Math.max(pos1.getBlockX(), pos2.getBlockX()),
-                    Math.max(pos1.getBlockY(), pos2.getBlockY()) + 20, // 🔺 Tăng Y thêm 20 block
-                    Math.max(pos1.getBlockZ(), pos2.getBlockZ())
-            );
-
-            CuboidRegion region = new CuboidRegion(weWorld, min, max);
-
-            Bukkit.getLogger().info("[BaseClear] Xoá vùng base '" + baseId + "': " + min + " -> " + max);
-
-            try (EditSession editSession = WorldEdit.getInstance().newEditSession(weWorld)) {
-                editSession.setFastMode(true);
-                editSession.setReorderMode(EditSession.ReorderMode.MULTI_STAGE);
-
-                editSession.setBlocks(region, BlockTypes.AIR.getDefaultState());
-            }
-
-            Bukkit.getLogger().info("[BaseClear] Đã xoá thành công công trình trong base '" + baseId + "'");
-            return true;
-
-        } catch (Exception e) {
-            Bukkit.getLogger().severe("[BaseClear] Lỗi khi xoá base: " + baseId);
-            e.printStackTrace();
-            return false;
-        }
+        }.runTaskAsynchronously(plugin);
     }
 
+    public void upgradeBaseAsync(Player player, Guild guild, String baseId, int nextLevel) {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                try {
+                    String schematicName = getSchematicForLevel(nextLevel);
+                    Map<String, BaseData.BaseClaim> bases = BaseData.loadBases();
+                    BaseData.BaseClaim baseClaim = bases.get(baseId);
+
+                    if (baseClaim == null) {
+                        player.sendMessage("§cKhông tìm thấy base để upgrade.");
+                        return;
+                    }
+
+                    double centerX = (baseClaim.pos1.getX() + baseClaim.pos2.getX()) / 2.0;
+                    double centerY = (baseClaim.pos1.getY() + baseClaim.pos2.getY()) / 2.0;
+                    double centerZ = (baseClaim.pos1.getZ() + baseClaim.pos2.getZ()) / 2.0;
+                    Location centerLocation = new Location(baseClaim.pos1.getWorld(), centerX, centerY, centerZ);
+
+                    File schematicFile = new File(plugin.getDataFolder(), "schem/" + schematicName);
+                    ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
+                    if (format == null) throw new IllegalArgumentException("Định dạng schematic không hợp lệ");
+
+                    Clipboard clipboard;
+                    try (ClipboardReader reader = format.getReader(new FileInputStream(schematicFile))) {
+                        clipboard = reader.read();
+                    }
+
+                    Region region = clipboard.getRegion();
+                    int width = region.getWidth();
+                    int height = region.getHeight();
+                    int length = region.getLength();
+
+                    Location playerLoc = player.getLocation();
+                    BlockVector3 pasteLocation = BlockVector3.at(
+                            (int) Math.floor(centerLocation.getX()),
+                            (int) playerLoc.getY(),
+                            (int) Math.floor(centerLocation.getZ()));
+
+                    com.sk89q.worldedit.world.World weWorld = FaweAPI.getWorld(centerLocation.getWorld().getName());
+                    if (weWorld == null) throw new IllegalStateException("FAWE world không tồn tại");
+
+                    new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            try (EditSession editSession = WorldEdit.getInstance().newEditSession(weWorld)) {
+                                ClipboardHolder clipboardHolder = new ClipboardHolder(clipboard);
+                                Operation operation = clipboardHolder.createPaste(editSession)
+                                        .to(pasteLocation)
+                                        .ignoreAirBlocks(false)
+                                        .build();
+                                Operations.complete(operation);
+
+                                // ✅ Các bước sau khi paste xong
+                                updateBaseLevel(baseId, nextLevel);
+                                consumeUpgradeResources(guild, nextLevel);
+
+                                Location holoLoc = centerLocation.clone().add(0, 2, 0);
+                                BaseHologramManager.updateBaseHologram(baseId, holoLoc, guild.getName(), nextLevel);
+
+                                player.sendMessage("§a§lUPGRADE THÀNH CÔNG!");
+                                player.sendMessage("§eBase đã được nâng cấp lên level §6" + nextLevel);
+                                player.sendMessage("§7Kích thước schematic: §f" + width + "x" + height + "x" + length);
+
+                                broadcastToGuild(plugin, guild,
+                                        "§6" + player.getName() + " §ađã nâng cấp base lên level §6" + nextLevel + "§a!");
+
+                            } catch (Exception e) {
+                                player.sendMessage("§cLỗi khi paste schematic: " + e.getMessage());
+                                e.printStackTrace();
+                            }
+                        }
+                    }.runTask(plugin);
+
+                } catch (Exception e) {
+                    player.sendMessage("§cLỗi khi chuẩn bị upgrade: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        }.runTaskAsynchronously(plugin);
+    }
+
+    public static boolean isPlayerInsideBase(Player player, BaseData.BaseClaim base) {
+        if (player == null || base == null || base.pos1 == null || base.pos2 == null) return false;
+
+        Location loc = player.getLocation();
+        Location pos1 = base.pos1;
+        Location pos2 = base.pos2;
+
+        // Kiểm tra cùng thế giới
+        if (!loc.getWorld().getName().equals(pos1.getWorld().getName())) return false;
+
+        // Lấy min/max cho từng trục
+        double minX = Math.min(pos1.getX(), pos2.getX());
+        double maxX = Math.max(pos1.getX(), pos2.getX());
+        double minY = Math.min(pos1.getY(), pos2.getY());
+        double maxY = Math.max(pos1.getY(), pos2.getY());
+        double minZ = Math.min(pos1.getZ(), pos2.getZ());
+        double maxZ = Math.max(pos1.getZ(), pos2.getZ());
+
+        // Kiểm tra tọa độ người chơi có nằm trong vùng không
+        return loc.getX() >= minX && loc.getX() <= maxX &&
+                loc.getY() >= minY && loc.getY() <= maxY &&
+                loc.getZ() >= minZ && loc.getZ() <= maxZ;
+    }
+
+    public static boolean isPlayerInTheirOwnBase(Player player) {
+        if (player == null) return false;
+
+        Guild guild = GuildManager.getInstance().getPlayerGuild(player);
+        if (guild == null || guild.getBaseID() == null) return false;
+
+        BaseData.BaseClaim base = BaseData.getBaseClaim(guild.getBaseID());
+        if (base == null) return false;
+
+        return isPlayerInsideBase(player, base);
+    }
+
+    //api public
+
+    public static boolean hasGuildWithBase(Player player) {
+        if (player == null) return false;
+
+        Guild guild = GuildManager.getInstance().getPlayerGuild(player);
+        if (guild == null) return false;
+
+        String baseId = guild.getBaseID();
+        if (baseId == null || BaseData.getBaseClaim(baseId) == null) return false;
+
+        return true;
+    }
+
+    public static Location getSafeRandomLocationInOwnBase(Player player) {
+        if (player == null) return null;
+
+        Guild guild = GuildManager.getInstance().getPlayerGuild(player);
+        if (guild == null || guild.getBaseID() == null) return null;
+
+        BaseData.BaseClaim base = BaseData.getBaseClaim(guild.getBaseID());
+        if (base == null || base.pos1 == null || base.pos2 == null) return null;
+
+        Location pos1 = base.pos1;
+        Location pos2 = base.pos2;
+
+        World world = pos1.getWorld();
+        if (world == null || !world.equals(pos2.getWorld())) return null;
+
+        int minX = Math.min(pos1.getBlockX(), pos2.getBlockX());
+        int maxX = Math.max(pos1.getBlockX(), pos2.getBlockX());
+        int minZ = Math.min(pos1.getBlockZ(), pos2.getBlockZ());
+        int maxZ = Math.max(pos1.getBlockZ(), pos2.getBlockZ());
+
+        Random random = new Random();
+        int tries = 0, maxTries = 30;
+
+        while (tries < maxTries) {
+            int x = random.nextInt(maxX - minX + 1) + minX;
+            int z = random.nextInt(maxZ - minZ + 1) + minZ;
+            int y = world.getHighestBlockYAt(x, z);
+
+            Location checkLoc = new Location(world, x + 0.5, y, z + 0.5);
+            Material ground = checkLoc.clone().subtract(0, 1, 0).getBlock().getType();
+            Material head = checkLoc.getBlock().getType();
+            Material above = checkLoc.clone().add(0, 1, 0).getBlock().getType();
+
+            // Điều kiện an toàn:
+            boolean solidGround = ground.isSolid() && !ground.name().toLowerCase().contains("lava") && !ground.name().toLowerCase().contains("water");
+            boolean hasHeadroom = head == Material.AIR && above == Material.AIR;
+
+            if (solidGround && hasHeadroom) {
+                return checkLoc;
+            }
+
+            tries++;
+        }
+
+        Bukkit.getLogger().warning("[BaseSpawn] Không tìm được vị trí an toàn trong base sau " + maxTries + " lần thử.");
+        return null;
+    }
+
+    public static Location getFirstChestInBase(BaseData.BaseClaim base) {
+        if (base == null || base.pos1 == null || base.pos2 == null) return null;
+
+        World world = base.pos1.getWorld();
+        if (world == null || !world.equals(base.pos2.getWorld())) return null;
+
+        int minX = Math.min(base.pos1.getBlockX(), base.pos2.getBlockX());
+        int maxX = Math.max(base.pos1.getBlockX(), base.pos2.getBlockX());
+        int minZ = Math.min(base.pos1.getBlockZ(), base.pos2.getBlockZ());
+        int maxZ = Math.max(base.pos1.getBlockZ(), base.pos2.getBlockZ());
+
+        int minY = -64;
+        int maxY = 80;
+
+        for (int y = minY; y <= maxY; y++) {
+            for (int x = minX; x <= maxX; x++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    Chunk chunk = world.getChunkAt(x >> 4, z >> 4);
+                    if (!chunk.isLoaded()) chunk.load(true);
+
+                    Location loc = new Location(world, x, y, z);
+                    Material type = loc.getBlock().getType();
+
+                    if (type == Material.CHEST || type == Material.TRAPPED_CHEST) {
+                        Bukkit.getLogger().info("[DEBUG] Đã tìm thấy chest tại: " + loc);
+                        return loc;
+                    }
+                }
+            }
+        }
+
+        Bukkit.getLogger().warning("[DEBUG] Không tìm thấy chest nào trong base.");
+        return null;
+    }
 
 }

@@ -13,6 +13,7 @@ import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import king.kongguilds.Base.BaseData;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.Member;
+import me.clip.placeholderapi.libs.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -111,15 +112,19 @@ public class BaseRegionManager {
             // Thiết lập flags
             try {
                 region.setFlag(Flags.PVP, StateFlag.State.DENY);
-                region.setFlag(Flags.INTERACT, StateFlag.State.ALLOW);
-                region.setFlag(Flags.USE, StateFlag.State.ALLOW);
-                region.setFlag(Flags.CHEST_ACCESS, StateFlag.State.ALLOW);
                 region.setFlag(Flags.ENTRY, StateFlag.State.DENY); // ✅ CHẶN NGƯỜI LẠ
                 region.setFlag(Flags.EXIT, StateFlag.State.ALLOW);
+
+                // Thêm thông báo khi vào và rời vùng
+                String guildName = guild.getName();
+                region.setFlag(Flags.GREET_MESSAGE, "§aChào mừng đến vùng của guild §f" + guildName);
+                region.setFlag(Flags.FAREWELL_MESSAGE, "§cBạn đã rời khỏi vùng của guild §f" + guildName);
+
             } catch (Exception flagEx) {
                 Bukkit.getLogger().warning("Error setting flags: " + flagEx.getMessage());
                 flagEx.printStackTrace();
             }
+
 
             // Thêm region vào RegionManager
             regionManager.addRegion(region);

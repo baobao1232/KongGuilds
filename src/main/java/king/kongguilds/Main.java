@@ -47,6 +47,7 @@ public class Main extends JavaPlugin {
         startTasks();
 
         BaseHologramManager.loadAllBaseHolograms();
+        BaseHologramManager.loadAllChestHolograms();
 //        for (Method m : this.getClass().getDeclaredMethods()) {
 //            getLogger().info("[KongGuilds] Method found: " + m.getName());
 //        }
@@ -57,7 +58,7 @@ public class Main extends JavaPlugin {
     public void onDisable() {
         if (guildManager != null) {
             for (Guild guild : guildManager.getAllGuilds()) {
-                guildManager.saveGuild(guild.getName());
+                guildManager.saveGuildSync(guild.getName());
             }
         }
         instance = null;
