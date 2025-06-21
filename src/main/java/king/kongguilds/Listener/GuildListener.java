@@ -296,8 +296,6 @@ public class GuildListener implements Listener {
         player.sendMessage(ChatColor.RED + "Bạn không có quyền chỉnh sửa thành viên.");
     }
 
-
-
     // ---------- XỬ LÝ CLICK TRONG GUI CHỈNH THÀNH VIÊN ----------
 
     @EventHandler
@@ -355,7 +353,6 @@ public class GuildListener implements Listener {
 
         String message = event.getMessage();
 
-        // Gọi hàm mới: không cần truyền format
         guildManager.sendGuildMessage(plugin, guild, player, message);
     }
 

@@ -2,9 +2,12 @@ king\kongguilds\License\LicenseManager.class
 king\kongguilds\Model\Member.class
 king\kongguilds\Listener\GuildListener.class
 king\kongguilds\Manager\UUIDAdapter.class
+king\kongguilds\Manager\GuildManager$1.class
 king\kongguilds\Gui\GuildMemberEditGUI.class
 king\kongguilds\Fawe\SelectedPositionsManager.class
+king\kongguilds\Manager\GuildManager$4.class
 king\kongguilds\Base\BaseData$1.class
+king\kongguilds\Manager\GuildManager$3$1.class
 king\kongguilds\Gui\GuildGUI.class
 king\kongguilds\Main.class
 king\kongguilds\Manager\GuildManager$UpgradeRequirement.class
@@ -12,8 +15,12 @@ king\kongguilds\Model\Rank.class
 king\kongguilds\Model\Guild$RankType.class
 king\kongguilds\WorldGuard\BaseRegionManager.class
 king\kongguilds\Config\GuildConfig.class
+king\kongguilds\Manager\GuildManager$5$1.class
 king\kongguilds\Model\TimedInvite.class
 king\kongguilds\Base\BaseData.class
+king\kongguilds\Manager\GuildManager$2.class
+king\kongguilds\Manager\GuildManager$4$1.class
+king\kongguilds\Manager\GuildManager$5.class
 king\kongguilds\Manager\GuildManager.class
 king\kongguilds\Manager\ItemValueCalculator.class
 king\kongguilds\Base\BaseData$BaseClaim.class
@@ -24,4 +31,5 @@ king\kongguilds\Model\Guild.class
 king\kongguilds\Command\GuildCommands.class
 king\kongguilds\Manager\TaskManager.class
 king\kongguilds\Base\BaseData$LocationAdapter.class
+king\kongguilds\Manager\GuildManager$3.class
 king\kongguilds\Manager\MessageManager.class

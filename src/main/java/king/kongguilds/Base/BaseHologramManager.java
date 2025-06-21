@@ -2,7 +2,9 @@ package king.kongguilds.Base;
 
 import eu.decentsoftware.holograms.api.DHAPI;
 import eu.decentsoftware.holograms.api.holograms.Hologram;
+import king.kongguilds.Config.GuildConfig;
 import king.kongguilds.Manager.GuildManager;
+import king.kongguilds.Model.Guild;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -25,13 +27,18 @@ public class BaseHologramManager {
         holograms.put(baseId, hologram);
     }
 
-    public static void createClaimedBaseHologram(String baseId, Location location, String guildName, int level) {
-        removeHologram(baseId); // Xoá nếu có sẵn
+    public static void createClaimedBaseHologram(String baseId, Location location, Guild guild) {
+        removeHologram(baseId);
+
+        int level = guild.getLevel();
+        int exp = guild.getExp();
+        int nextExp = GuildConfig.getExpForLevel(level + 1);
 
         Hologram hologram = DHAPI.createHologram("base_" + baseId, location, List.of(
                 "§6§l=== BASE ===",
-                "§eGuild: §f" + guildName,
+                "§eGuild: §f" + guild.getName(),
                 "§eLevel: §6" + level,
+                "§eEXP: §b" + exp + "§7 / §b" + nextExp,
                 "§7ID: " + baseId
         ));
 
@@ -39,12 +46,25 @@ public class BaseHologramManager {
     }
 
     public static void removeHologram(String baseId) {
-        String hologramName = "base_" + baseId;
-        Hologram holo = DHAPI.getHologram(hologramName); // Lấy lại hologram từ API
-        if (holo != null) {
-            holo.delete();
+        // Xoá hologram vùng base
+        String baseHologramName = "base_" + baseId;
+        Hologram baseHolo = DHAPI.getHologram(baseHologramName);
+        if (baseHolo != null) {
+            baseHolo.delete();
         }
+
+        // Xoá hologram chest (nếu có)
+        String chestHologramName = "chest_" + baseId;
+        Hologram chestHolo = DHAPI.getHologram(chestHologramName);
+        if (chestHolo != null) {
+            chestHolo.delete();
+        }
+
+        // Xoá khỏi cache nếu bạn có map `holograms`
+        holograms.remove(baseId);             // xoá base_... nếu key là baseId
+        holograms.remove("chest_" + baseId);  // xoá chest_... nếu key tồn tại
     }
+
 
     public static void removeAllOrphans(Set<String> existingBaseIds) {
         Iterator<Map.Entry<String, Hologram>> it = holograms.entrySet().iterator();
@@ -110,10 +130,10 @@ public class BaseHologramManager {
         Bukkit.getLogger().info("[CLEANUP] Tổng số hologram mồ côi đã bị xoá: " + removedCount);
     }
 
-    public static void updateBaseHologram(String baseId, Location location, String guildName, int level) {
+    public static void updateBaseHologram(String baseId, Location location, Guild guild) {
         // Xóa hologram cũ và tạo mới với level updated
         // hologramAPI.removeHologram(baseId);
-        createClaimedBaseHologram(baseId, location, guildName, level);
+        createClaimedBaseHologram(baseId, location, guild);
     }
 
     public static void loadAllBaseHolograms() {
@@ -132,10 +152,17 @@ public class BaseHologramManager {
             }
 
             if (baseClaim.isClaimed()) {
-                createClaimedBaseHologram(baseId, location, baseClaim.getGuildName(), baseClaim.getLevel());
+                Guild guild = GuildManager.getInstance().getGuildByName(baseClaim.getGuildName());
+                if (guild == null) {
+                    Bukkit.getLogger().warning("[BaseHologram] Không tìm thấy guild: " + baseClaim.getGuildName());
+                    continue;
+                }
+
+                createClaimedBaseHologram(baseId, location, guild); // dùng overload mới
             } else {
                 createUnclaimedBaseHologram(baseId, location);
             }
+
         }
 
         Bukkit.getLogger().info("[BaseHologram] Đã load lại tất cả hologram base.");

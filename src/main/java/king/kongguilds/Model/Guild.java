@@ -2,6 +2,7 @@ package king.kongguilds.Model;
 
 import king.kongguilds.Config.GuildConfig;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -28,14 +29,18 @@ public class Guild {
     private String baseID = null;
     private double money = 0.0;
     private transient JavaPlugin plugin;
+    private String createDate; // yyyy-MM-dd
 
     public Guild(String name, UUID leader, JavaPlugin plugin) {
         this.name = name;
         this.leader = leader;
         this.plugin = plugin;
+        this.createDate = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date());
 
         // Đưa leader vào members với rank LEADER
-        addMember(leader, name, Guild.RankType.LEADER, "Leader", 0);
+        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(leader);
+        String playerName = offlinePlayer.getName();
+        addMember(leader, playerName, Guild.RankType.LEADER, "Leader", 0);
 
         // Tạo inventory kho chung 27 slot
         sharedStorageInventory = Bukkit.createInventory(null, 27, "Kho chung guild: " + name);
@@ -64,8 +69,17 @@ public class Guild {
         return leader;
     }
 
+    public String getCreateDate() {
+        return createDate;
+    }
+
     public int getLevel() {
         return level;
+    }
+
+    public int getExpToNextLevel() {
+        int nextExp = GuildConfig.getExpForLevel(level + 1);
+        return Math.max(0, nextExp - exp);
     }
 
     public double getMoney() { return money; }

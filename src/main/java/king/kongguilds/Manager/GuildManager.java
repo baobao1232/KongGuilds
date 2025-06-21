@@ -71,13 +71,35 @@ public class GuildManager {
         return true;
     }
 
-
     public void removeGuild(String name) {
-        guilds.remove(name);
+        // 1. Xóa khỏi danh sách bộ nhớ
+        Guild guild = guilds.remove(name);
+
+        // 3. Nếu có base, xóa base
+        if (guild != null && guild.getBaseID() != null) {
+            String baseId = guild.getBaseID();
+
+            // Xóa hologram
+            BaseHologramManager.removeHologram(baseId);
+            BaseHologramManager.removeHologram("chest_" + baseId); // Nếu có hologram trên chest
+
+            // Xóa vùng bảo vệ nếu có (WorldGuard)
+            World baseWorld = BaseData.getWorldByBaseID(baseId);
+            if (baseWorld != null) {
+                BaseRegionManager.removeBaseRegion(baseId, baseWorld);
+            }
+
+            // Xóa base khỏi hệ thống
+            BaseData.removeBaseById(baseId);
+        }
+
         File guildFile = new File(guildFolder, name + ".json");
         if (guildFile.exists()) {
             guildFile.delete();
         }
+
+        // Log
+        Bukkit.getLogger().info("Đã xóa guild '" + name + "' cùng với base và hologram liên quan.");
     }
 
     public Guild getGuild(String name) {
@@ -93,29 +115,70 @@ public class GuildManager {
     }
 
     public void asyncLoadGuilds() {
+        File[] files = guildFolder.listFiles((dir, name) -> name.endsWith(".json"));
+        if (files == null || files.length == 0) return;
+
+        List<File> fileList = Arrays.asList(files);
+        Iterator<File> iterator = fileList.iterator();
+
+        // ✅ Tạo BukkitRunnable trước, rồi gọi runTaskTimerAsync từ chính nó
         new BukkitRunnable() {
+            int loaded = 0;
+            final int MAX_PER_TICK = 3;
+
             @Override
             public void run() {
-                File[] files = guildFolder.listFiles((dir, name) -> name.endsWith(".json"));
-                if (files != null) {
-                    for (File file : files) {
-                        try (FileReader reader = new FileReader(file)) {
-                            Guild guild = gson.fromJson(reader, Guild.class);
-                            guild.setPlugin(plugin);
-                            guild.loadSharedStorage();
-                            synchronized (guilds) {
-                                guilds.put(guild.getName(), guild);
-                            }
-                            Bukkit.getLogger().info("[AsyncLoad] Loaded guild: " + guild.getName());
-                        } catch (Exception e) {
-                            Bukkit.getLogger().warning("[AsyncLoad] Failed to load guild from " + file.getName());
-                            e.printStackTrace();
+                int count = 0;
+                while (iterator.hasNext() && count < MAX_PER_TICK) {
+                    File file = iterator.next();
+                    try (FileReader reader = new FileReader(file)) {
+                        Guild guild = gson.fromJson(reader, Guild.class);
+                        guild.setPlugin(plugin);
+                        guild.loadSharedStorage();
+                        synchronized (guilds) {
+                            guilds.put(guild.getName(), guild);
                         }
+                        loaded++;
+                        Bukkit.getLogger().info("[GuildLoad] Loaded: " + guild.getName());
+                    } catch (Exception e) {
+                        Bukkit.getLogger().warning("[GuildLoad] Error: " + file.getName());
+                        e.printStackTrace();
                     }
+                    count++;
+                }
+
+                if (!iterator.hasNext()) {
+                    Bukkit.getLogger().info("[GuildLoad] Hoàn tất load " + loaded + " guilds.");
+                    this.cancel();
                 }
             }
-        }.runTaskAsynchronously(plugin);
+        }.runTaskTimerAsynchronously(plugin, 0L, 2L); // ✅ Gọi đúng cách từ chính BukkitRunnable
     }
+
+//    public void asyncLoadGuilds() {
+//        new BukkitRunnable() {
+//            @Override
+//            public void run() {
+//                File[] files = guildFolder.listFiles((dir, name) -> name.endsWith(".json"));
+//                if (files != null) {
+//                    for (File file : files) {
+//                        try (FileReader reader = new FileReader(file)) {
+//                            Guild guild = gson.fromJson(reader, Guild.class);
+//                            guild.setPlugin(plugin);
+//                            guild.loadSharedStorage();
+//                            synchronized (guilds) {
+//                                guilds.put(guild.getName(), guild);
+//                            }
+//                            Bukkit.getLogger().info("[AsyncLoad] Loaded guild: " + guild.getName());
+//                        } catch (Exception e) {
+//                            Bukkit.getLogger().warning("[AsyncLoad] Failed to load guild from " + file.getName());
+//                            e.printStackTrace();
+//                        }
+//                    }
+//                }
+//            }
+//        }.runTaskAsynchronously(plugin);
+//    }
 
     private void validateAndFixGuildUUIDs(Guild guild) {
         // Fix leader UUID nếu null
@@ -137,18 +200,20 @@ public class GuildManager {
         }
     }
 
-    public void saveGuildSync(String name) {
+    public void saveGuildAsync(String name) {
         Guild guild = guilds.get(name);
         if (guild != null) {
-            guild.saveSharedStorage(); // cập nhật base64
-            try (FileWriter writer = new FileWriter(new File(guildFolder, name + ".json"))) {
-                gson.toJson(guild, writer);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            guild.saveSharedStorage();
+
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                try (FileWriter writer = new FileWriter(new File(guildFolder, name + ".json"))) {
+                    gson.toJson(guild, writer);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            });
         }
     }
-
 
     public void addMember(String guildName, String playerName, UUID memberId, String rankName, String memberType, int points) {
         Guild guild = getGuild(guildName);
@@ -286,6 +351,12 @@ public class GuildManager {
         return null;
     }
 
+    public Guild getGuildByName(String name) {
+        if (name == null) return null;
+        return guilds.get(name);
+    }
+
+
     public boolean hasGuildGUI(Player player) {
         Guild guild = getPlayerGuild(player);
         return guild != null;
@@ -334,7 +405,7 @@ public class GuildManager {
         Guild guild = getPlayerGuild(player);
         if (guild != null) {
             guild.addExp(amount);
-            saveGuildSync(guild.getName());
+            saveGuildAsync(guild.getName());
         }
     }
 
@@ -376,52 +447,43 @@ public class GuildManager {
     public void sendGuildMessage(JavaPlugin plugin, Guild guild, Player sender, String message) {
         String formatted = formatGuildChatMessage(guild, sender, message);
 
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                for (UUID memberId : guild.getMembers().keySet()) {
-                    Player member = Bukkit.getPlayer(memberId);
-                    if (member != null && member.isOnline()) {
-                        String parsed = PlaceholderAPI.setPlaceholders(member, formatted);
-
-                        new BukkitRunnable() {
-                            @Override
-                            public void run() {
-                                member.sendMessage(parsed);
-                            }
-                        }.runTask(plugin);
-                    }
-                }
+        // Duyệt danh sách người chơi online trong guild, xử lý Placeholder và gửi trong 1 task
+        List<Player> onlineMembers = new ArrayList<>();
+        for (UUID memberId : guild.getMembers().keySet()) {
+            Player member = Bukkit.getPlayer(memberId);
+            if (member != null && member.isOnline()) {
+                onlineMembers.add(member);
             }
-        }.runTaskAsynchronously(plugin);
-    }
+        }
 
+        // Duyệt offline → không tạo task nếu rỗng
+        if (onlineMembers.isEmpty()) return;
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            for (Player member : onlineMembers) {
+                String parsedMessage = PlaceholderAPI.setPlaceholders(member, formatted);
+                member.sendMessage(parsedMessage);
+            }
+        });
+    }
 
     public void broadcastToGuild(JavaPlugin plugin, Guild guild, String message) {
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                for (UUID memberId : guild.getMembers().keySet()) {
-                    Player member = Bukkit.getPlayer(memberId);
-                    if (member != null && member.isOnline()) {
-                        String parsedMessage = PlaceholderAPI.setPlaceholders(member, message);
-
-                        // Gửi trong main thread
-                        new BukkitRunnable() {
-                            @Override
-                            public void run() {
-                                member.sendMessage(parsedMessage);
-                            }
-                        }.runTask(plugin);
-                    }
-                }
+        List<Player> onlineMembers = new ArrayList<>();
+        for (UUID memberId : guild.getMembers().keySet()) {
+            Player member = Bukkit.getPlayer(memberId);
+            if (member != null && member.isOnline()) {
+                onlineMembers.add(member);
             }
-        }.runTaskAsynchronously(plugin);
-    }
+        }
 
+        if (onlineMembers.isEmpty()) return;
 
-    public boolean isInGuildChat(UUID playerId) {
-        return guildChatMode.contains(playerId);
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            for (Player member : onlineMembers) {
+                String parsedMessage = PlaceholderAPI.setPlaceholders(member, message);
+                member.sendMessage(parsedMessage);
+            }
+        });
     }
 
     public static Location getCenter(Location pos1, Location pos2) {
@@ -519,9 +581,9 @@ public class GuildManager {
 
                     Location playerLoc = player.getLocation();
                     BlockVector3 pasteLocation = BlockVector3.at(
-                            (int) Math.floor(centerLocation.getX()),
+                            (int) Math.floor(centerLocation.getX()) + 1,
                             (int) playerLoc.getY(),
-                            (int) Math.floor(centerLocation.getZ())
+                            (int) Math.floor(centerLocation.getZ()) + 1
                     );
 
                     new BukkitRunnable() {
@@ -550,35 +612,6 @@ public class GuildManager {
             }
         }.runTaskAsynchronously(plugin);
     }
-
-    // Thêm method để có thể điều chỉnh offset Y nếu cần
-//    public static BlockVector3 pasteSchematicAtLocationWithOffset(JavaPlugin plugin, Location centerLocation, String fileName, int yOffset) {
-//        Bukkit.getLogger().info("[DEBUG] Bắt đầu paste schematic với Y offset: " + yOffset);
-//
-//        // Điều chỉnh centerLocation với offset Y
-//        Location adjustedLocation = centerLocation.clone();
-//        adjustedLocation.setY(centerLocation.getY() + yOffset);
-//
-//        return pasteSchematicAtLocation(player, plugin, adjustedLocation, fileName);
-//    }
-
-    // Method paste tại vị trí player đứng (thay vì center của base)
-//    public static BlockVector3 pasteSchematicAtPlayer(JavaPlugin plugin, Player player, String fileName) {
-//        Bukkit.getLogger().info("[DEBUG] Paste schematic tại vị trí player: " + player.getName());
-//
-//        Location playerLocation = player.getLocation();
-//        // Căn chỉnh vào center của block
-//        Location centerLocation = new Location(
-//                playerLocation.getWorld(),
-//                Math.floor(playerLocation.getX()) + 0.5,
-//                Math.floor(playerLocation.getY()),
-//                Math.floor(playerLocation.getZ()) + 0.5
-//        );
-//
-//        return pasteSchematicAtLocation(plugin, centerLocation, fileName);
-//    }
-
-
 
     // Phương thức cập nhật level cho base sau khi paste thành công
     public static void updateBaseLevel(String baseId, int newLevel) {
@@ -873,7 +906,7 @@ public class GuildManager {
                                 consumeUpgradeResources(guild, nextLevel);
 
                                 Location holoLoc = centerLocation.clone().add(0, 2, 0);
-                                BaseHologramManager.updateBaseHologram(baseId, holoLoc, guild.getName(), nextLevel);
+                                BaseHologramManager.updateBaseHologram(baseId, holoLoc, guild);
 
                                 player.sendMessage("§a§lUPGRADE THÀNH CÔNG!");
                                 player.sendMessage("§eBase đã được nâng cấp lên level §6" + nextLevel);
@@ -934,6 +967,9 @@ public class GuildManager {
     }
 
     //api public
+    public boolean isInGuildChat(UUID playerId) {
+        return guildChatMode.contains(playerId);
+    }
 
     public static boolean hasGuildWithBase(Player player) {
         if (player == null) return false;

@@ -399,6 +399,7 @@ public class GuildCommands implements CommandExecutor {
 
                         if (result) {
                             BaseHologramManager.removeHologram(baseIdToRemove);
+
                             BaseRegionManager.removeBaseRegion(baseIdToRemove, world);
                             player.sendMessage(ChatColor.GREEN + "Base '" + baseIdToRemove + "' đã được xóa thành công.");
                         } else {
@@ -552,7 +553,6 @@ public class GuildCommands implements CommandExecutor {
                 }
 
                 String nameToRemove = guildToDisband.getName();
-                guildManager.removeGuild(nameToRemove);
 
                 // Gửi thông báo cho tất cả thành viên nếu online
                 for (UUID memberId : guildToDisband.getMembers().keySet()) {
@@ -561,6 +561,8 @@ public class GuildCommands implements CommandExecutor {
                         player.sendMessage(messageManager.getMessage("member", "disband_success", Map.of("guild", nameToRemove)));
                     }
                 }
+
+                guildManager.removeGuild(nameToRemove);
 
                 player.sendMessage(messageManager.getMessage("member", "disband_success", Map.of("guild", nameToRemove)));
                 break;
@@ -727,7 +729,7 @@ public class GuildCommands implements CommandExecutor {
 
                             // Tạo hologram
                             Location holoLoc = center.clone().add(0, 2, 0);
-                            BaseHologramManager.createClaimedBaseHologram(baseId, holoLoc, g.getName(), g.getLevel());
+                            BaseHologramManager.createClaimedBaseHologram(baseId, holoLoc, g);
 
 
                         } catch (IOException e) {

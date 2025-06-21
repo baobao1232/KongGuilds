@@ -58,7 +58,7 @@ public class Main extends JavaPlugin {
     public void onDisable() {
         if (guildManager != null) {
             for (Guild guild : guildManager.getAllGuilds()) {
-                guildManager.saveGuildSync(guild.getName());
+                guildManager.saveGuildAsync(guild.getName());
             }
         }
         instance = null;

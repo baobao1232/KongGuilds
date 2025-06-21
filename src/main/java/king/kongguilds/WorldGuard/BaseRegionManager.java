@@ -66,7 +66,7 @@ public class BaseRegionManager {
 
             BlockVector3 max = BlockVector3.at(
                     Math.max(pos1.getBlockX(), pos2.getBlockX()),
-                    Math.max(pos1.getBlockY(), pos2.getBlockY()),
+                    Math.max(pos1.getBlockY(), pos2.getBlockY()) + 50, // 👉 nâng Y lên 50 block
                     Math.max(pos1.getBlockZ(), pos2.getBlockZ())
             );
 
