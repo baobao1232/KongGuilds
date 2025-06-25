@@ -7,8 +7,8 @@ king\kongguilds\Gui\GuildMemberEditGUI.class
 king\kongguilds\Fawe\SelectedPositionsManager.class
 king\kongguilds\Manager\GuildManager$4.class
 king\kongguilds\Base\BaseData$1.class
-king\kongguilds\Manager\GuildManager$3$1.class
 king\kongguilds\Gui\GuildGUI.class
+king\kongguilds\TaskManager\TaskManager.class
 king\kongguilds\Main.class
 king\kongguilds\Manager\GuildManager$UpgradeRequirement.class
 king\kongguilds\Model\Rank.class
@@ -29,7 +29,6 @@ king\kongguilds\Cache\GuildDataCache.class
 king\kongguilds\Base\BaseHologramManager.class
 king\kongguilds\Model\Guild.class
 king\kongguilds\Command\GuildCommands.class
-king\kongguilds\Manager\TaskManager.class
 king\kongguilds\Base\BaseData$LocationAdapter.class
 king\kongguilds\Manager\GuildManager$3.class
 king\kongguilds\Manager\MessageManager.class

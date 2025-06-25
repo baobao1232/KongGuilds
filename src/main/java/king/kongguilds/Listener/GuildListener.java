@@ -122,6 +122,7 @@ public class GuildListener implements Listener {
         if (totalPoints > 0) {
             guildManager.updateMemberPoints(guild.getName(), player.getUniqueId(), totalPoints);
             guild.saveSharedStorage();
+            guildManager.addExpToGuild(player, totalPoints);
             player.sendMessage("§aDonate thành công! +" + totalPoints + " điểm.");
         } else {
             player.sendMessage("§cBạn chưa donate vật phẩm nào có giá trị.");

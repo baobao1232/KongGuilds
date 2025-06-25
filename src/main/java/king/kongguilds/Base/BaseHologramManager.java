@@ -16,6 +16,10 @@ import java.util.stream.Collectors;
 public class BaseHologramManager {
     private static final Map<String, Hologram> holograms = new HashMap<>();
 
+    public static Map<String, Hologram> getHolograms() {
+        return holograms;
+    }
+
     public static void createUnclaimedBaseHologram(String baseId, Location location) {
         removeHologram(baseId); // Xoá nếu có sẵn
 
@@ -24,7 +28,7 @@ public class BaseHologramManager {
                 "§eDùng lệnh §b/g base claim §eđể chiếm base này"
         ));
 
-        holograms.put(baseId, hologram);
+        holograms.put("base_" + baseId, hologram);
     }
 
     public static void createClaimedBaseHologram(String baseId, Location location, Guild guild) {
@@ -42,7 +46,7 @@ public class BaseHologramManager {
                 "§7ID: " + baseId
         ));
 
-        holograms.put(baseId, hologram);
+        holograms.put("base_" + baseId, hologram);
     }
 
     public static void removeHologram(String baseId) {
@@ -61,7 +65,7 @@ public class BaseHologramManager {
         }
 
         // Xoá khỏi cache nếu bạn có map `holograms`
-        holograms.remove(baseId);             // xoá base_... nếu key là baseId
+        holograms.remove("base_" + baseId);
         holograms.remove("chest_" + baseId);  // xoá chest_... nếu key tồn tại
     }
 
@@ -130,11 +134,40 @@ public class BaseHologramManager {
         Bukkit.getLogger().info("[CLEANUP] Tổng số hologram mồ côi đã bị xoá: " + removedCount);
     }
 
-    public static void updateBaseHologram(String baseId, Location location, Guild guild) {
-        // Xóa hologram cũ và tạo mới với level updated
-        // hologramAPI.removeHologram(baseId);
-        createClaimedBaseHologram(baseId, location, guild);
+    public static void updateBaseHologram(String baseId, Guild guild) {
+
+        BaseData.BaseClaim base = BaseData.getBaseClaim(baseId);
+        if (base == null || !base.isClaimed()) {
+            return; // bỏ qua base chưa claim
+        }
+
+        Hologram hologram = holograms.get("base_" + baseId);
+        if (hologram == null) {
+            Bukkit.getLogger().warning("[BaseHologram] Không tìm thấy hologram với baseId: " + baseId);
+            return;
+        }
+
+        if (guild == null) {
+            Bukkit.getLogger().warning("[BaseHologram] Guild null khi cập nhật base: " + baseId);
+            return;
+        }
+
+        int level = guild.getLevel();
+        int exp = guild.getExp();
+        int nextExp = GuildConfig.getExpForLevel(level + 1);
+
+        //Bukkit.getLogger().info("[BaseHologram] Cập nhật hologram cho baseId: " + baseId);
+        //Bukkit.getLogger().info("[BaseHologram] Guild: " + guild.getName() + ", Level: " + level + ", EXP: " + exp + "/" + nextExp);
+
+        DHAPI.setHologramLines(hologram, List.of(
+                "§6§l=== BASE ===",
+                "§eGuild: §f" + guild.getName(),
+                "§eLevel: §6" + level,
+                "§eEXP: §b" + exp + "§7 / §b" + nextExp,
+                "§7ID: " + baseId
+        ));
     }
+
 
     public static void loadAllBaseHolograms() {
         clearAll();
@@ -152,13 +185,13 @@ public class BaseHologramManager {
             }
 
             if (baseClaim.isClaimed()) {
-                Guild guild = GuildManager.getInstance().getGuildByName(baseClaim.getGuildName());
-                if (guild == null) {
+                Guild guildClaim = GuildManager.getInstance().getGuildByName(baseClaim.getGuildName());
+                if (guildClaim == null) {
                     Bukkit.getLogger().warning("[BaseHologram] Không tìm thấy guild: " + baseClaim.getGuildName());
                     continue;
                 }
 
-                createClaimedBaseHologram(baseId, location, guild); // dùng overload mới
+                createClaimedBaseHologram(baseId, location, guildClaim); // dùng overload mới
             } else {
                 createUnclaimedBaseHologram(baseId, location);
             }

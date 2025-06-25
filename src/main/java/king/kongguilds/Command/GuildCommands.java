@@ -260,7 +260,10 @@ public class GuildCommands implements CommandExecutor {
                     }
                     // Reload config, guilds, messages
                     try {
-                        guildManager.asyncLoadGuilds(); // Reload guilds từ file (bạn phải chắc GuildManager có method này)
+                        guildManager.asyncLoadGuilds(() -> {
+                            player.sendMessage(ChatColor.GREEN + "§aPlugin đã được reload thành công!");
+                        });
+
                         messageManager.load(new File(plugin.getDataFolder(), "messages.yml"));
                         player.sendMessage(ChatColor.GREEN + "§aPlugin đã được reload thành công!");
                     } catch (IOException e) {

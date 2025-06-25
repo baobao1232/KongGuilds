@@ -37,7 +37,7 @@ import java.util.*;
 public class GuildManager {
     private static GuildManager instance;
     private final JavaPlugin plugin;
-    private final Map<String, Guild> guilds = new HashMap<>();
+    private static final Map<String, Guild> guilds = new HashMap<>();
     private final File guildFolder;
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
     private final Map<UUID, TimedInvite> pendingInvites = new HashMap<>();
@@ -53,8 +53,12 @@ public class GuildManager {
         this.messageManager = messageManager;
         this.guildFolder = new File(plugin.getDataFolder(), "Guilds");
         createGuildFolder();
-        asyncLoadGuilds();
     }
+
+    public static Map<String, Guild> getGuilds() {
+        return guilds;
+    }
+
 
     public static GuildManager getInstance() {
         return instance;
@@ -114,14 +118,16 @@ public class GuildManager {
         }
     }
 
-    public void asyncLoadGuilds() {
+    public void asyncLoadGuilds(Runnable onComplete) {
         File[] files = guildFolder.listFiles((dir, name) -> name.endsWith(".json"));
-        if (files == null || files.length == 0) return;
+        if (files == null || files.length == 0) {
+            if (onComplete != null) onComplete.run();
+            return;
+        }
 
         List<File> fileList = Arrays.asList(files);
         Iterator<File> iterator = fileList.iterator();
 
-        // ✅ Tạo BukkitRunnable trước, rồi gọi runTaskTimerAsync từ chính nó
         new BukkitRunnable() {
             int loaded = 0;
             final int MAX_PER_TICK = 3;
@@ -136,7 +142,7 @@ public class GuildManager {
                         guild.setPlugin(plugin);
                         guild.loadSharedStorage();
                         synchronized (guilds) {
-                            guilds.put(guild.getName(), guild);
+                            guilds.put(guild.getName().toLowerCase(), guild); // ✅ normalize key
                         }
                         loaded++;
                         Bukkit.getLogger().info("[GuildLoad] Loaded: " + guild.getName());
@@ -149,11 +155,16 @@ public class GuildManager {
 
                 if (!iterator.hasNext()) {
                     Bukkit.getLogger().info("[GuildLoad] Hoàn tất load " + loaded + " guilds.");
+                    if (onComplete != null) {
+                        // ✅ Chạy callback trên main thread
+                        Bukkit.getScheduler().runTask(plugin, onComplete);
+                    }
                     this.cancel();
                 }
             }
-        }.runTaskTimerAsynchronously(plugin, 0L, 2L); // ✅ Gọi đúng cách từ chính BukkitRunnable
+        }.runTaskTimerAsynchronously(plugin, 0L, 2L);
     }
+
 
 //    public void asyncLoadGuilds() {
 //        new BukkitRunnable() {
@@ -200,18 +211,16 @@ public class GuildManager {
         }
     }
 
-    public void saveGuildAsync(String name) {
+    public void saveGuildSync(String name) {
         Guild guild = guilds.get(name);
         if (guild != null) {
             guild.saveSharedStorage();
 
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                try (FileWriter writer = new FileWriter(new File(guildFolder, name + ".json"))) {
-                    gson.toJson(guild, writer);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            });
+            try (FileWriter writer = new FileWriter(new File(guildFolder, name + ".json"))) {
+                gson.toJson(guild, writer);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -353,9 +362,8 @@ public class GuildManager {
 
     public Guild getGuildByName(String name) {
         if (name == null) return null;
-        return guilds.get(name);
+        return guilds.get(name.toLowerCase());
     }
-
 
     public boolean hasGuildGUI(Player player) {
         Guild guild = getPlayerGuild(player);
@@ -400,12 +408,13 @@ public class GuildManager {
         }
     }
 
-
     public void addExpToGuild(Player player, int amount) {
         Guild guild = getPlayerGuild(player);
+        String baseID = guild.getBaseID();
         if (guild != null) {
             guild.addExp(amount);
-            saveGuildAsync(guild.getName());
+            saveGuildSync(guild.getName());
+            BaseHologramManager.updateBaseHologram(baseID, guild);
         }
     }
 
@@ -559,7 +568,6 @@ public class GuildManager {
                     if (world == null) throw new IllegalArgumentException("World không hợp lệ");
 
                     com.sk89q.worldedit.world.World weWorld = FaweAPI.getWorld(world.getName());
-
                     if (weWorld == null) throw new IllegalStateException("Không tìm thấy FAWE World");
 
                     ClipboardFormat format = ClipboardFormats.findByFile(schematicFile);
@@ -581,29 +589,26 @@ public class GuildManager {
 
                     Location playerLoc = player.getLocation();
                     BlockVector3 pasteLocation = BlockVector3.at(
-                            (int) Math.floor(centerLocation.getX()) + 1,
-                            (int) playerLoc.getY(),
-                            (int) Math.floor(centerLocation.getZ()) + 1
+                            centerLocation.getBlockX() + 1,
+                            playerLoc.getBlockY(),
+                            centerLocation.getBlockZ()
                     );
 
-                    new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            try (EditSession editSession = WorldEdit.getInstance().newEditSession(weWorld)) {
-                                ClipboardHolder clipboardHolder = new ClipboardHolder(clipboard);
-                                Operation operation = clipboardHolder.createPaste(editSession)
-                                        .to(pasteLocation)
-                                        .ignoreAirBlocks(false)
-                                        .build();
+                    // Dán async bằng FAWE
+                    EditSession editSession = WorldEdit.getInstance().newEditSessionBuilder()
+                            .world(weWorld)
+                            .build();
 
-                                Operations.complete(operation);
-                                Bukkit.getLogger().info("[Schematic] Pasted thành công tại: " + pasteLocation);
-                            } catch (Exception e) {
-                                Bukkit.getLogger().severe("[Schematic] Lỗi khi paste: " + e.getMessage());
-                                e.printStackTrace();
-                            }
-                        }
-                    }.runTask(plugin);
+                    ClipboardHolder holder = new ClipboardHolder(clipboard);
+                    Operation operation = holder.createPaste(editSession)
+                            .to(pasteLocation)
+                            .ignoreAirBlocks(false)
+                            .build();
+
+                    Operations.complete(operation);
+                    editSession.flushSession();
+
+                    Bukkit.getLogger().info("[Schematic] Dán schematic thành công tại: " + pasteLocation);
 
                 } catch (Exception e) {
                     Bukkit.getLogger().severe("[Schematic] Lỗi async: " + e.getMessage());
@@ -906,7 +911,7 @@ public class GuildManager {
                                 consumeUpgradeResources(guild, nextLevel);
 
                                 Location holoLoc = centerLocation.clone().add(0, 2, 0);
-                                BaseHologramManager.updateBaseHologram(baseId, holoLoc, guild);
+                                BaseHologramManager.updateBaseHologram(baseId, guild);
 
                                 player.sendMessage("§a§lUPGRADE THÀNH CÔNG!");
                                 player.sendMessage("§eBase đã được nâng cấp lên level §6" + nextLevel);
@@ -944,7 +949,7 @@ public class GuildManager {
         double minX = Math.min(pos1.getX(), pos2.getX());
         double maxX = Math.max(pos1.getX(), pos2.getX());
         double minY = Math.min(pos1.getY(), pos2.getY());
-        double maxY = Math.max(pos1.getY(), pos2.getY());
+        double maxY = Math.max(pos1.getY(), pos2.getY()) + 50;
         double minZ = Math.min(pos1.getZ(), pos2.getZ());
         double maxZ = Math.max(pos1.getZ(), pos2.getZ());
 
@@ -1065,5 +1070,22 @@ public class GuildManager {
         Bukkit.getLogger().warning("[DEBUG] Không tìm thấy chest nào trong base.");
         return null;
     }
+
+    public static Guild getGuildByBaseId(String baseId) {
+        for (Guild guild : guilds.values()) {
+            String guildBaseId = guild.getBaseID();
+            if (guildBaseId == null) {
+                Bukkit.getLogger().warning("[DEBUG] Guild '" + guild.getName() + "' chưa có baseID.");
+                continue;
+            }
+
+            if (guildBaseId.equals(baseId)) {
+                return guild;
+            }
+        }
+
+        return null;
+    }
+
 
 }

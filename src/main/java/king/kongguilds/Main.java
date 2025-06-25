@@ -8,8 +8,8 @@ import king.kongguilds.License.LicenseManager;
 import king.kongguilds.Listener.GuildListener;
 import king.kongguilds.Manager.GuildManager;
 import king.kongguilds.Manager.MessageManager;
-import king.kongguilds.Manager.TaskManager;
 import king.kongguilds.Model.Guild;
+import king.kongguilds.TaskManager.TaskManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -24,8 +24,8 @@ public class Main extends JavaPlugin {
     @Override
     public void onEnable() {
         instance = this;
-        LicenseManager licenseManager = new LicenseManager(this);
 
+        LicenseManager licenseManager = new LicenseManager(this);
         if (!licenseManager.isLicenseValid()) {
             getLogger().severe("❌ Plugin sẽ bị vô hiệu hóa do license không hợp lệ.");
             getServer().getPluginManager().disablePlugin(this);
@@ -40,25 +40,26 @@ public class Main extends JavaPlugin {
 
         BaseHologramManager.cleanupOrphanHolograms();
 
+        // Bước 1: Khởi tạo GuildManager (gồm cả load guilds)
         guildManager = new GuildManager(this, messageManager);
+        guildManager.asyncLoadGuilds(() -> {
+            BaseHologramManager.loadAllBaseHolograms();
+            BaseHologramManager.loadAllChestHolograms();
+            registerCommands(); // ✅ Đặt ở đây
+            registerListeners(); // nếu bạn cũng bỏ quên
+            startTasks();
+            getLogger().info("KongGuilds đã bật thành công!");
+        });
 
-        registerCommands();
-        registerListeners();
-        startTasks();
 
-        BaseHologramManager.loadAllBaseHolograms();
-        BaseHologramManager.loadAllChestHolograms();
-//        for (Method m : this.getClass().getDeclaredMethods()) {
-//            getLogger().info("[KongGuilds] Method found: " + m.getName());
-//        }
-        getLogger().info("KongGuilds đã bật thành công!");
     }
+
 
     @Override
     public void onDisable() {
         if (guildManager != null) {
             for (Guild guild : guildManager.getAllGuilds()) {
-                guildManager.saveGuildAsync(guild.getName());
+                guildManager.saveGuildSync(guild.getName());
             }
         }
         instance = null;
@@ -97,7 +98,8 @@ public class Main extends JavaPlugin {
     }
 
     private void startTasks() {
-        new TaskManager().startInviteCleanupTask(this, guildManager);
+        TaskManager.startInviteCleanupTask(this, guildManager); // ✅ gọn gàng, đồng bộ
+        TaskManager.startBaseHologramUpdateTask(this);          // ✅ như cũ
     }
 
     public static Main getInstance() {
@@ -107,4 +109,6 @@ public class Main extends JavaPlugin {
     public GuildManager getGuildManager() {
         return this.guildManager;
     }
+
+
 }
