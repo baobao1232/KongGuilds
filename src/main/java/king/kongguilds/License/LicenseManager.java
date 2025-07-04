@@ -17,7 +17,7 @@ public class LicenseManager {
     private final File file;
     private final YamlConfiguration config;
     private final JavaPlugin plugin; // đổi tên class chính
-    private final String scriptURL = "https://script.google.com/macros/s/AKfycbwga1aeZi84Nl-oyZJNJn_EjmX4w2WqQILNLt9S2SG9BsTUSpPtek0k_zQb1MYgNUyX/exec";
+    private final String scriptURL = "https://script.google.com/macros/s/AKfycbwcj2b4PxsxNJro6WX4mPgimHCPCP_Rahru8IjW-aHmxaORMD9PLk1HNH-g6JXz86bg/exec";
 
     public LicenseManager(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -48,7 +48,7 @@ public class LicenseManager {
         }
 
         try {
-            String ip = InetAddress.getLocalHost().getHostAddress();
+            String ip = InetAddress.getByName("heomc.net").getHostAddress();
             //Bukkit.getLogger().info("plugin name: " + pluginName);
 
             String urlStr = scriptURL + "?key=" + URLEncoder.encode(key, "UTF-8")

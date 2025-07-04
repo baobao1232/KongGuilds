@@ -25,14 +25,14 @@ public class Main extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
-        LicenseManager licenseManager = new LicenseManager(this);
-        if (!licenseManager.isLicenseValid()) {
-            getLogger().severe("❌ Plugin sẽ bị vô hiệu hóa do license không hợp lệ.");
-            getServer().getPluginManager().disablePlugin(this);
-            return;
-        }
-
-        getLogger().info("✅ License OK. Đang bật plugin...");
+//        LicenseManager licenseManager = new LicenseManager(this);
+//        if (!licenseManager.isLicenseValid()) {
+//            getLogger().severe("❌ Plugin sẽ bị vô hiệu hóa do license không hợp lệ.");
+//            getServer().getPluginManager().disablePlugin(this);
+//            return;
+//        }
+//
+//        getLogger().info("✅ License OK. Đang bật plugin...");
 
         createPluginFolder();
         loadPluginConfig();
