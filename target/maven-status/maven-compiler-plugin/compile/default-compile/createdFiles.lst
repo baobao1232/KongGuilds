@@ -2,6 +2,7 @@ king\kongguilds\License\LicenseManager.class
 king\kongguilds\Model\Member.class
 king\kongguilds\Listener\GuildListener.class
 king\kongguilds\Manager\UUIDAdapter.class
+king\kongguilds\Gui\GUIType.class
 king\kongguilds\Manager\GuildManager$1.class
 king\kongguilds\Gui\GuildMemberEditGUI.class
 king\kongguilds\Fawe\SelectedPositionsManager.class
@@ -28,6 +29,7 @@ king\kongguilds\Manager\ItemStackSerializer.class
 king\kongguilds\Cache\GuildDataCache.class
 king\kongguilds\Base\BaseHologramManager.class
 king\kongguilds\Model\Guild.class
+king\kongguilds\Gui\GUIHolder.class
 king\kongguilds\Command\GuildCommands.class
 king\kongguilds\Base\BaseData$LocationAdapter.class
 king\kongguilds\Manager\GuildManager$3.class
