@@ -46,6 +46,13 @@ public class GuildManager {
     private final Set<UUID> guildChatMode = new HashSet<>();
     private static final Map<String, Hologram> hologramMap = new HashMap<>();
     private final Map<String, List<UUID>> itemRequests = new HashMap<>();
+    public static final int[] DONATE_SLOTS = {
+            0,1,2,3,4,5,6,
+            9,10,11,12,13,14,15,
+            18,19,20,21,22,23,24,
+            27,28,29,30,31,32,33
+    };
+
 
     public GuildManager(JavaPlugin plugin, MessageManager messageManager) {
         this.plugin = plugin;
@@ -142,7 +149,7 @@ public class GuildManager {
                         guild.setPlugin(plugin);
                         guild.loadSharedStorage();
                         synchronized (guilds) {
-                            guilds.put(guild.getName().toLowerCase(), guild); // ✅ normalize key
+                            guilds.put(guild.getName(), guild); // ✅ normalize key
                         }
                         loaded++;
                         Bukkit.getLogger().info("[GuildLoad] Loaded: " + guild.getName());
@@ -391,22 +398,50 @@ public class GuildManager {
 
     public void updateMemberPoints(String guildName, UUID memberId, int points) {
         Guild guild = getGuild(guildName);
-        if (guild != null && guild.hasMember(memberId)) {
-            Member info = guild.getMembers().get(memberId);
-            // Tạo Member mới giữ nguyên uuid, name, joinDate, rank, cập nhật điểm (score)
-            int newScore = info.getScore() + points;
+        Bukkit.getLogger().info("[GuildDebug] guildName truyền vào = " + guildName);
+        Bukkit.getLogger().info("[GuildDebug] guild keys hiện có = " + guilds.keySet());
 
-            Member updatedMember = new Member(
-                    info.getUUID(),
-                    info.getName(),
-                    info.getJoinDate(),
-                    info.getRank(),
-                    newScore
-            );
-
-            guild.getMembers().put(memberId, updatedMember);
+        if (guild == null) {
+            Bukkit.getLogger().warning("[DonateDebug] Guild null: " + guildName);
+            return;
         }
+
+        if (!guild.hasMember(memberId)) {
+            Bukkit.getLogger().warning("[DonateDebug] Member không tồn tại trong guild: " + memberId);
+            return;
+        }
+
+        Member info = guild.getMembers().get(memberId);
+
+        if (info == null) {
+            Bukkit.getLogger().warning("[DonateDebug] Member object null: " + memberId);
+            return;
+        }
+
+        int oldScore = info.getScore();
+        int newScore = oldScore + points;
+
+        Bukkit.getLogger().info("[DonateDebug] Update điểm cho "
+                + info.getName()
+                + " | Cũ=" + oldScore
+                + " | +=" + points
+                + " | Mới=" + newScore);
+
+        Member updatedMember = new Member(
+                info.getUUID(),
+                info.getName(),
+                info.getJoinDate(),
+                info.getRank(),
+                newScore
+        );
+
+        guild.getMembers().put(memberId, updatedMember);
+
+        // 🔥 VERIFY NGAY SAU PUT
+        Member verify = guild.getMembers().get(memberId);
+        Bukkit.getLogger().info("[DonateDebug] Verify score sau update = " + verify.getScore());
     }
+
 
     public void addExpToGuild(Player player, int amount) {
         Guild guild = getPlayerGuild(player);

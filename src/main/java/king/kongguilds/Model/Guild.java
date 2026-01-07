@@ -1,8 +1,11 @@
 package king.kongguilds.Model;
 
 import king.kongguilds.Config.GuildConfig;
+import king.kongguilds.Gui.GUIHolder;
+import king.kongguilds.Gui.GUIType;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -12,6 +15,8 @@ import org.bukkit.util.io.BukkitObjectOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.*;
+
+import static king.kongguilds.Gui.GuildGUI.renderCommonGuildMenu;
 
 public class Guild {
     private String name;
@@ -173,10 +178,9 @@ public class Guild {
 
     private void createSharedStorageInventory() {
         // Tạo inventory 27 slots cho kho chung, tiêu chuẩn
-        this.sharedStorageInventory = Bukkit.createInventory(null, 27, "Kho Chung Guild " + name);
+        this.sharedStorageInventory = Bukkit.createInventory(null, 36, "Kho Chung Guild " + name);
         // **Không gọi loadSharedStorage() ở đây!**
     }
-
 
     public Inventory getSharedStorageInventory() {
         if (sharedStorageInventory == null) {

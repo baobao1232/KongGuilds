@@ -1,19 +1,18 @@
 package king.kongguilds.Listener;
 
+import king.kongguilds.Gui.GUIHolder;
+import king.kongguilds.Gui.GUIType;
 import king.kongguilds.Gui.GuildGUI;
 import king.kongguilds.Gui.GuildMemberEditGUI;
-import king.kongguilds.Manager.ItemValueCalculator;
-import king.kongguilds.Model.Guild;
 import king.kongguilds.Manager.GuildManager;
+import king.kongguilds.Manager.ItemValueCalculator;
 import king.kongguilds.Manager.MessageManager;
+import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.Member;
-import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -23,7 +22,6 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -34,8 +32,7 @@ public class GuildListener implements Listener {
 
     private final GuildManager guildManager;
     private final MessageManager messageManager;
-
-    private final JavaPlugin plugin; // 🟢 Thêm dòng này
+    private final JavaPlugin plugin;
 
     public GuildListener(JavaPlugin plugin, GuildManager guildManager, MessageManager messageManager) {
         this.plugin = plugin;
@@ -43,102 +40,25 @@ public class GuildListener implements Listener {
         this.messageManager = messageManager;
     }
 
-    // ---------- KHO CHUNG ----------
-
-    @EventHandler
-    public void onGuildStorageClick(InventoryClickEvent e) {
-        Player p = (Player) e.getWhoClicked();
-        InventoryView inv = e.getView();
-
-        if (inv.getTitle().equals("Guild Storage")) {
-            Guild g = guildManager.getPlayerGuild(p);
-            Member m = g.getMembers().get(p.getUniqueId());
-            if (!m.getRank().equalsIgnoreCase("Leader") && !m.getRank().equalsIgnoreCase("Co-Leader")) {
-                e.setCancelled(true);
-
-                // Nếu là member, gửi request khi click vào item
-                ItemStack clicked = e.getCurrentItem();
-                if (clicked != null && clicked.getType() != Material.AIR) {
-                    guildManager.requestItem(g.getName(), clicked, p.getUniqueId());
-                    p.sendMessage("§aYêu cầu xin item đã được gửi.");
-                }
-            }
-        }
+    /* =========================
+       DONATE SLOT CHECK
+       ========================= */
+    private boolean isDonateSlot(int slot) {
+        if (slot == 29) return false;
+        return (slot >= 0 && slot <= 6)
+                || (slot >= 9 && slot <= 15)
+                || (slot >= 18 && slot <= 24)
+                || (slot >= 27 && slot <= 33);
     }
 
+    /* =========================
+       GUILD INFO GUI
+       ========================= */
     @EventHandler
-    public void onDonateClose(InventoryCloseEvent e) {
-        if (!e.getView().getTitle().equals("Donate vật phẩm")) return;
-
-        Player player = (Player) e.getPlayer();
-        Guild guild = guildManager.getPlayerGuild(player);
-        if (guild == null) return;
-
-        int totalPoints = 0;
-        Inventory storage = guild.getSharedStorageInventory();
-        List<ItemStack> returnItems = new ArrayList<>(); // <-- danh sách item trả lại
-
-        for (ItemStack item : e.getInventory().getContents()) {
-            if (item == null || item.getType().isAir()) continue;
-
-            Bukkit.getLogger().info("[DonateDebug] Kiểm tra item: " + item.getType() + " x" + item.getAmount());
-
-            ItemMeta meta = item.getItemMeta();
-            if (meta == null) {
-                Bukkit.getLogger().info("[DonateDebug] -> Bỏ qua: Không có ItemMeta");
-                returnItems.add(item); // <-- đẩy về vì không có meta
-                continue;
-            }
-
-            for (NamespacedKey key : meta.getPersistentDataContainer().getKeys()) {
-                Bukkit.getLogger().info("[DonateDebug] -> PDC key: " + key);
-            }
-
-            double baseValue = ItemValueCalculator.calculateItemValue(item);
-            double value = baseValue * 10;
-
-            Bukkit.getLogger().info("[DonateDebug] -> Giá trị mỗi item: " + value);
-
-            if (Double.isNaN(value) || value <= 0) {
-                Bukkit.getLogger().info("[DonateDebug] -> Bỏ qua: Item không có giá trị");
-                returnItems.add(item); // <-- đẩy về nếu item không có giá trị
-                continue;
-            }
-
-            int itemPoints = (int) Math.floor(value * item.getAmount());
-            Bukkit.getLogger().info("[DonateDebug] -> Tổng điểm: " + itemPoints);
-            totalPoints += itemPoints;
-
-            // Clone và thêm vào kho
-            storage.addItem(item.clone());
-        }
-
-        // Đẩy item không hợp lệ về inventory người chơi
-        for (ItemStack i : returnItems) {
-            player.getInventory().addItem(i);
-        }
-
-        // Cập nhật điểm cho player
-        if (totalPoints > 0) {
-            guildManager.updateMemberPoints(guild.getName(), player.getUniqueId(), totalPoints);
-            guild.saveSharedStorage();
-            guildManager.addExpToGuild(player, totalPoints);
-            player.sendMessage("§aDonate thành công! +" + totalPoints + " điểm.");
-        } else {
-            player.sendMessage("§cBạn chưa donate vật phẩm nào có giá trị.");
-        }
-    }
-
-    // ---------- MỞ GUI CHỈNH THÀNH VIÊN ----------
-
-    @EventHandler
-    public void onClickMemberGui(InventoryClickEvent event) {
+    public void onGuildInfoClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
-
-        InventoryView view = event.getView();
-        String title = ChatColor.stripColor(view.getTitle());
-
-        if (!title.startsWith("Guild: ")) return;
+        if (!(event.getInventory().getHolder() instanceof GUIHolder holder)) return;
+        if (holder.getType() != GUIType.GUILD_INFO) return;
 
         event.setCancelled(true);
 
@@ -146,246 +66,243 @@ public class GuildListener implements Listener {
         if (guild == null) return;
 
         int slot = event.getRawSlot();
+        int page = holder.getPage();
 
-        // 🔒 Click slot 26 để mở kho guild
-        if (slot == 26) {
-            UUID locker = guildManager.getGuildStorageLocker(guild.getName());
-            if (locker != null && !locker.equals(player.getUniqueId())) {
-                player.sendMessage(messageManager.getMessage("member", "storage_locked"));
-                return;
-            }
-
-            guildManager.lockGuildStorage(guild.getName(), player.getUniqueId());
-            player.openInventory(guild.getSharedStorageInventory());
-            player.sendMessage(messageManager.getMessage("member", "storage_opened"));
-            return;
-        }
-
-        // ❌ Click slot 8 để đóng GUI
         if (slot == 8) {
             player.closeInventory();
             return;
         }
 
-        // 🔁 Chuyển trang
-        if (slot == 30 || slot == 32) {
-            int currentPage = 0;
-            if (title.contains("| Trang: ")) {
-                try {
-                    String pagePart = title.split("\\| Trang: ")[1].trim();
-                    currentPage = Integer.parseInt(pagePart);
-                } catch (Exception ignored) {
-                }
-            }
+        if (slot == 26) {
+            openStorage(player, guild);
+            return;
+        }
 
-            if (slot == 30 && currentPage > 0) {
-                GuildGUI.displayGuildInfo(player, guild, currentPage - 1);
-            } else if (slot == 32) {
-                int membersPerPage = 26 - 3; // 0-25 nhưng trừ 8, 17, 26
-                int maxPage = (int) Math.ceil((double) guild.getSortedMembers().size() / membersPerPage);
-                if (currentPage + 1 < maxPage) {
-                    GuildGUI.displayGuildInfo(player, guild, currentPage + 1);
-                }
+        if (slot == 30 && page > 0) {
+            GuildGUI.openGuildInfoGUI(player, guild, page - 1);
+            return;
+        }
+
+        if (slot == 32) {
+            int perPage = 23;
+            int maxPage = (int) Math.ceil((double) guild.getSortedMembers().size() / perPage);
+            if (page + 1 < maxPage) {
+                GuildGUI.openGuildInfoGUI(player, guild, page + 1);
             }
             return;
         }
 
-        // 🟢 Slot 34: Mở GUI donate vật phẩm
         if (slot == 34) {
-            GuildGUI.openDonateGUI(player);
-            return;
+            GuildGUI.openDonateGUI(player, guild);
         }
-
-        // 🔵 Slot 35: Mở GUI duyệt yêu cầu vật phẩm (chỉ Leader/Co-Leader)
-        if (slot == 35) {
-            String rank = guild.getMembers().get(player.getUniqueId()).getRank();
-            if (rank.equalsIgnoreCase("Leader") || rank.equalsIgnoreCase("Co-Leader")) {
-                Inventory approveGui = Bukkit.createInventory(null, 54, "Duyệt yêu cầu item");
-
-                // Lấy toàn bộ yêu cầu của guild từ map trong GuildManager
-                Map<String, List<UUID>> requestMap = guildManager.getItemRequestMap();
-                Inventory storage = guild.getSharedStorageInventory();
-
-                int i = 0;
-                for (ItemStack item : storage.getContents()) {
-                    if (item == null || item.getType().isAir()) continue;
-
-                    String key = guildManager.itemKey(item);
-                    List<UUID> requesters = requestMap.getOrDefault(key, new ArrayList<>());
-                    if (requesters.isEmpty()) continue;
-
-                    // Clone và thêm lore người xin
-                    ItemStack clone = item.clone();
-                    ItemMeta meta = clone.getItemMeta();
-                    if (meta != null) {
-                        List<String> lore = new ArrayList<>();
-                        lore.add("§7Xin bởi:");
-                        for (UUID id : requesters) {
-                            lore.add("§f- " + Bukkit.getOfflinePlayer(id).getName());
-                        }
-                        meta.setLore(lore);
-                        clone.setItemMeta(meta);
-                    }
-
-                    if (i < approveGui.getSize()) {
-                        approveGui.setItem(i++, clone);
-                    }
-                }
-
-                player.openInventory(approveGui);
-            } else {
-                player.sendMessage("§cBạn không có quyền duyệt yêu cầu.");
-            }
-            return;
-        }
-
-        // 📄 Slot hiển thị thành viên
-        List<Integer> displaySlots = new ArrayList<>();
-        for (int i = 0; i <= 25; i++) {
-            if (i != 8 && i != 17 && i != 26) {
-                displaySlots.add(i);
-            }
-        }
-        if (!displaySlots.contains(slot)) return;
-
-        int currentPage = 0;
-        if (title.contains("| Trang: ")) {
-            try {
-                String pagePart = title.split("\\| Trang: ")[1].trim();
-                currentPage = Integer.parseInt(pagePart);
-            } catch (Exception ignored) {
-            }
-        }
-
-        int membersPerPage = displaySlots.size();
-        int startIndex = currentPage * membersPerPage;
-        int memberIndex = startIndex + displaySlots.indexOf(slot);
-
-        List<Map.Entry<UUID, Member>> sortedMembers = guild.getSortedMembers();
-        if (memberIndex >= sortedMembers.size()) return;
-
-        UUID clickedMemberId = sortedMembers.get(memberIndex).getKey();
-        Member clickedMember = sortedMembers.get(memberIndex).getValue();
-
-        UUID playerId = player.getUniqueId();
-
-        if (clickedMemberId.equals(playerId)) {
-            player.sendMessage(messageManager.getMessage("member", "not_edit_yourself"));
-            return;
-        }
-
-        Member selfInfo = guild.getMembers().get(playerId);
-        if (selfInfo == null) return;
-
-        Guild.RankType selfRank = Guild.RankType.valueOf(selfInfo.getRank());
-        Guild.RankType targetRank = Guild.RankType.valueOf(clickedMember.getRank());
-
-        if (selfRank == Guild.RankType.LEADER) {
-            GuildMemberEditGUI.openEditGUI(player, guild, clickedMemberId);
-            return;
-        }
-
-        if (selfRank == Guild.RankType.OFFICER) {
-            if (targetRank == Guild.RankType.MEMBER) {
-                GuildMemberEditGUI.openEditGUI(player, guild, clickedMemberId);
-            } else {
-                player.sendMessage(messageManager.getMessage("member", "cannot_edit_higher_rank"));
-            }
-            return;
-        }
-
-        player.sendMessage(ChatColor.RED + "Bạn không có quyền chỉnh sửa thành viên.");
     }
 
-    // ---------- XỬ LÝ CLICK TRONG GUI CHỈNH THÀNH VIÊN ----------
-
+    /* =========================
+       DONATE GUI CLICK
+       ========================= */
     @EventHandler
-    public void onEditMemberGUI(InventoryClickEvent event) {
+    public void onDonateClick(InventoryClickEvent event) {
+        if (!(event.getInventory().getHolder() instanceof GUIHolder holder)) return;
+        if (holder.getType() != GUIType.DONATE) return;
+
+        event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player player)) return;
-
-        String title = ChatColor.stripColor(event.getView().getTitle());
-        if (!title.startsWith("EditMember:")) return;
-
-        event.setCancelled(true); // Không cho move item
-
-        UUID targetId;
-        try {
-            targetId = UUID.fromString(title.substring("EditMember:".length()));
-        } catch (IllegalArgumentException e) {
-            player.sendMessage(ChatColor.RED + "Không xác định được thành viên.");
-            return;
-        }
-
-        Guild guild = guildManager.getPlayerGuild(player);
-        if (guild == null || !guild.hasMember(targetId)) {
-            player.sendMessage(ChatColor.RED + "Thành viên không tồn tại trong guild.");
-            return;
-        }
-
-        int slot = event.getRawSlot();
-
-        if (slot == 11) {
-            player.sendMessage("§a(TODO) Tăng rank cho " + guild.getMembers().get(targetId).getName());
-            // TODO: Tăng rank ở đây
-        } else if (slot == 15) {
-            player.sendMessage("§c(TODO) Giảm rank cho " + guild.getMembers().get(targetId).getName());
-            // TODO: Giảm rank ở đây
-        } else if (slot == 22) {
-            String name = guild.getMembers().get(targetId).getName();
-            String guildName = guild.getName();
-
-            guildManager.kickMember(player, guildName, targetId); // dùng hàm mới có kiểm tra quyền
-
-            player.closeInventory();
-        }
-    }
-
-    @EventHandler
-    public void onPlayerChat(AsyncPlayerChatEvent event) {
-        Player player = event.getPlayer();
-        UUID uuid = player.getUniqueId();
-
-        if (!guildManager.isInGuildChatMode(uuid)) return;
 
         Guild guild = guildManager.getPlayerGuild(player);
         if (guild == null) return;
 
-        event.setCancelled(true); // huỷ chat global
+        int rawSlot = event.getRawSlot();
+        boolean top = rawSlot < event.getInventory().getSize();
 
-        String message = event.getMessage();
+        ItemStack current = event.getCurrentItem();
 
-        guildManager.sendGuildMessage(plugin, guild, player, message);
-    }
+        if (!top) {
+            if (current == null || current.getType().isAir()) return;
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void clckRuongBase(PlayerInteractEvent event) {
-
-        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
-        if (event.getClickedBlock() == null) return;
-
-        Block clickedBlock = event.getClickedBlock();
-        Material type = clickedBlock.getType();
-
-        // Chỉ xử lý khi player click vào chest
-        if (type != Material.CHEST && type != Material.TRAPPED_CHEST) return;
-
-        Player player = event.getPlayer();
-        Guild guild = guildManager.getPlayerGuild(player);
-        // Kiểm tra xem player có đứng trong base của chính guild mình không
-        if (guildManager.isPlayerInTheirOwnBase(player)) {
-            event.setCancelled(true); // Ngăn mở chest mặc định
-
-            player.sendMessage("§aBạn đã mở kho donate của guild!");
-
-            // Mở GUI tùy chỉnh, ví dụ GUI donate
-            UUID locker = guildManager.getGuildStorageLocker(guild.getName());
-            if (locker != null && !locker.equals(player.getUniqueId())) {
-                player.sendMessage(messageManager.getMessage("member", "storage_locked"));
+            double value = ItemValueCalculator.calculateItemValue(current);
+            if (value <= 0 || Double.isNaN(value)) {
+                player.sendMessage("§cItem này không donate được.");
                 return;
             }
 
-            guildManager.lockGuildStorage(guild.getName(), player.getUniqueId());
-            player.openInventory(guild.getSharedStorageInventory());
+            int empty = findEmptyDonateSlot(event.getInventory());
+            if (empty == -1) {
+                player.sendMessage("§cDonate đã đầy.");
+                return;
+            }
+
+            ItemStack clone = current.clone();
+            int points = (int) (value * clone.getAmount());
+
+            ItemMeta meta = clone.getItemMeta();
+            List<String> lore = meta != null && meta.hasLore()
+                    ? new ArrayList<>(meta.getLore())
+                    : new ArrayList<>();
+            lore.add("§a+ " + points + " điểm Donate");
+            if (meta != null) {
+                meta.setLore(lore);
+                clone.setItemMeta(meta);
+            }
+
+            event.getInventory().setItem(empty, clone);
+            event.setCurrentItem(null);
+            return;
         }
+
+        if (rawSlot == 8) {
+            GuildGUI.openGuildInfoGUI(player, guild, 0);
+        }
+        if (rawSlot == 25) {
+            openStorage(player, guild);
+        }
+        if (rawSlot == 29) {
+            player.closeInventory();
+        }
+    }
+
+    private int findEmptyDonateSlot(Inventory inv) {
+        for (int i = 0; i < inv.getSize(); i++) {
+            if (isDonateSlot(i)) {
+                ItemStack it = inv.getItem(i);
+                if (it == null || it.getType().isAir()) return i;
+            }
+        }
+        return -1;
+    }
+
+    /* =========================
+       DONATE CLOSE
+       ========================= */
+    @EventHandler
+    public void onDonateClose(InventoryCloseEvent event) {
+        if (!(event.getInventory().getHolder() instanceof GUIHolder holder)) return;
+        if (holder.getType() != GUIType.DONATE) return;
+
+        Player player = (Player) event.getPlayer();
+        Guild guild = guildManager.getPlayerGuild(player);
+        if (guild == null) return;
+
+        int total = 0;
+        Inventory donate = event.getInventory();
+        Inventory storage = guild.getSharedStorageInventory();
+
+        for (int i = 0; i < donate.getSize(); i++) {
+            if (!isDonateSlot(i)) continue;
+
+            ItemStack item = donate.getItem(i);
+            if (item == null || item.getType().isAir()) continue;
+
+            double value = ItemValueCalculator.calculateItemValue(item) * 10;
+            if (value <= 0) continue;
+
+            total += (int) (value * item.getAmount());
+            storage.addItem(item.clone());
+        }
+
+        if (total > 0) {
+            guildManager.updateMemberPoints(guild.getName(), player.getUniqueId(), total);
+            guild.saveSharedStorage();
+            guildManager.addExpToGuild(player, total);
+            player.sendMessage("§aDonate thành công +" + total + " điểm.");
+        }
+    }
+
+    /* =========================
+       STORAGE GUI CLOSE (FIX QUAN TRỌNG)
+       ========================= */
+
+    @EventHandler
+    public void onClickStorageGui(InventoryClickEvent e) {
+        if (!(e.getInventory().getHolder() instanceof GUIHolder holder)) return;
+        if (holder.getType() != GUIType.STORAGE) return;
+
+        e.setCancelled(true); // ❌ CẤM MOVE ITEM
+
+        Player player = (Player) e.getWhoClicked();
+        Guild guild = guildManager.getPlayerGuild(player);
+        if (guild == null) return;
+
+        int rawSlot = e.getRawSlot();
+
+        // MENU
+        if (rawSlot == 8) {
+            GuildGUI.openGuildInfoGUI(player, guild, 0);
+        }
+        if (rawSlot == 25) {
+            GuildGUI.openStorageGUI(player, guild);
+        }
+        if (rawSlot == 29) {
+            player.closeInventory();
+        }
+    }
+
+//
+//    @EventHandler
+//    public void onStorageClose(InventoryCloseEvent event) {
+//        if (!(event.getInventory().getHolder() instanceof GUIHolder holder)) return;
+//        if (holder.getType() != GUIType.STORAGE) return;
+//
+//        Player player = (Player) event.getPlayer();
+//        Guild guild = guildManager.getPlayerGuild(player);
+//        if (guild == null) return;
+//
+//        Inventory gui = event.getInventory();
+//        Inventory storage = guild.getSharedStorageInventory();
+//
+//        for (int i = 0; i < 27; i++) {
+//            storage.setItem(i, gui.getItem(18 + i));
+//        }
+//
+//        guild.saveSharedStorage();
+//    }
+
+    /* =========================
+       BASE CHEST → STORAGE GUI
+       ========================= */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onBaseChestClick(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+
+        Block block = event.getClickedBlock();
+        if (block == null) return;
+
+        if (block.getType() != Material.CHEST && block.getType() != Material.TRAPPED_CHEST) return;
+
+        Player player = event.getPlayer();
+        if (!guildManager.isPlayerInTheirOwnBase(player)) return;
+
+        event.setCancelled(true);
+        Guild guild = guildManager.getPlayerGuild(player);
+        if (guild != null) {
+            openStorage(player, guild);
+        }
+    }
+
+    /* =========================
+       GUILD CHAT
+       ========================= */
+    @EventHandler
+    public void onGuildChat(AsyncPlayerChatEvent event) {
+        Player player = event.getPlayer();
+        if (!guildManager.isInGuildChatMode(player.getUniqueId())) return;
+
+        Guild guild = guildManager.getPlayerGuild(player);
+        if (guild == null) return;
+
+        event.setCancelled(true);
+        guildManager.sendGuildMessage(plugin, guild, player, event.getMessage());
+    }
+
+    /* =========================
+       STORAGE OPEN HELPER
+       ========================= */
+    private void openStorage(Player player, Guild guild) {
+        UUID locker = guildManager.getGuildStorageLocker(guild.getName());
+        if (locker != null && !locker.equals(player.getUniqueId())) {
+            player.sendMessage(messageManager.getMessage("member", "storage_locked"));
+            return;
+        }
+        guildManager.lockGuildStorage(guild.getName(), player.getUniqueId());
+        GuildGUI.openStorageGUI(player, guild);
     }
 }

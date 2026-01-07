@@ -21,11 +21,12 @@ public class Main extends JavaPlugin {
     private GuildManager guildManager;
     private MessageManager messageManager;
 
+
     @Override
     public void onEnable() {
         instance = this;
 
-//        LicenseManager licenseManager = new LicenseManager(this);
+        //        LicenseManager licenseManager = new LicenseManager(this);
 //        if (!licenseManager.isLicenseValid()) {
 //            getLogger().severe("❌ Plugin sẽ bị vô hiệu hóa do license không hợp lệ.");
 //            getServer().getPluginManager().disablePlugin(this);
@@ -34,26 +35,27 @@ public class Main extends JavaPlugin {
 //
 //        getLogger().info("✅ License OK. Đang bật plugin...");
 
+
         createPluginFolder();
         loadPluginConfig();
         if (!loadMessages()) return;
 
         BaseHologramManager.cleanupOrphanHolograms();
 
-        // Bước 1: Khởi tạo GuildManager (gồm cả load guilds)
         guildManager = new GuildManager(this, messageManager);
+
+        // ✅ ĐĂNG KÝ NGAY
+        registerCommands();
+        registerListeners();
+
+        // async load dữ liệu thì để async
         guildManager.asyncLoadGuilds(() -> {
             BaseHologramManager.loadAllBaseHolograms();
             BaseHologramManager.loadAllChestHolograms();
-            registerCommands(); // ✅ Đặt ở đây
-            registerListeners(); // nếu bạn cũng bỏ quên
             startTasks();
             getLogger().info("KongGuilds đã bật thành công!");
         });
-
-
     }
-
 
     @Override
     public void onDisable() {
