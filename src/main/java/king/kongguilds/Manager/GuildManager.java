@@ -27,6 +27,7 @@ import me.clip.placeholderapi.PlaceholderAPI;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -45,7 +46,7 @@ public class GuildManager {
     private final MessageManager messageManager;
     private final Set<UUID> guildChatMode = new HashSet<>();
     private static final Map<String, Hologram> hologramMap = new HashMap<>();
-    private final Map<String, List<UUID>> itemRequests = new HashMap<>();
+    private final Map<String, Map<String, List<UUID>>> itemRequests = new HashMap<>();
     public static final int[] DONATE_SLOTS = {
             0,1,2,3,4,5,6,
             9,10,11,12,13,14,15,
@@ -453,14 +454,6 @@ public class GuildManager {
         }
     }
 
-    public UUID getGuildStorageLocker(String guildName) {
-        return guildStorageLock.get(guildName);
-    }
-
-    public void lockGuildStorage(String guildName, UUID playerId) {
-        guildStorageLock.put(guildName, playerId);
-    }
-
     public void toggleGuildChat(Player player) {
         UUID uuid = player.getUniqueId();
         if (guildChatMode.contains(uuid)) {
@@ -784,24 +777,37 @@ public class GuildManager {
 
 
     //STORAGE
-    public Map<String, List<UUID>> getItemRequestMap() {
-        return this.itemRequests;
+    public Map<String, List<UUID>> getItemRequestMap(String guildName) {
+        return itemRequests.getOrDefault(guildName, new HashMap<>());
     }
+
+
 
     public void requestItem(String guildName, ItemStack item, UUID playerId) {
         String key = itemKey(item);
-        itemRequests.putIfAbsent(key, new ArrayList<>());
-        if (!itemRequests.get(key).contains(playerId)) {
-            itemRequests.get(key).add(playerId);
-        }
+
+        itemRequests
+                .computeIfAbsent(guildName, g -> new HashMap<>())
+                .computeIfAbsent(key, k -> new ArrayList<>())
+                .add(playerId);
     }
 
     public List<UUID> getItemRequesters(String guildName, ItemStack item) {
-        return itemRequests.getOrDefault(itemKey(item), new ArrayList<>());
+        Map<String, List<UUID>> guildMap = itemRequests.get(guildName);
+        if (guildMap == null) return new ArrayList<>();
+        return guildMap.getOrDefault(itemKey(item), new ArrayList<>());
     }
 
+
     public void clearItemRequest(String guildName, ItemStack item) {
-        itemRequests.remove(itemKey(item));
+        Map<String, List<UUID>> guildMap = itemRequests.get(guildName);
+        if (guildMap == null) return;
+
+        guildMap.remove(itemKey(item));
+
+        if (guildMap.isEmpty()) {
+            itemRequests.remove(guildName);
+        }
     }
 
     public String itemKey(ItemStack item) {
@@ -835,6 +841,38 @@ public class GuildManager {
 
         clearItemRequest(g.getName(), item);
     }
+
+    public ItemStack getItemFromStorageByKey(Guild guild, String key) {
+        if (guild == null) return null;
+
+        Inventory storage = guild.getSharedStorageInventory();
+        if (storage == null) return null;
+
+        for (ItemStack item : storage.getContents()) {
+            if (item == null || item.getType().isAir()) continue;
+
+            if (itemKey(item).equals(key)) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    public void removeItemFromStorage(Guild guild, ItemStack item) {
+        Inventory storage = guild.getSharedStorageInventory();
+
+        for (int i = 0; i < storage.getSize(); i++) {
+            ItemStack s = storage.getItem(i);
+            if (s == null) continue;
+
+            if (itemKey(s)
+                    .equals(itemKey(item))) {
+                storage.setItem(i, null);
+                return;
+            }
+        }
+    }
+
 
     public static void clearBaseAreaAsync(JavaPlugin plugin, String baseId, BaseData.BaseClaim base) {
         new BukkitRunnable() {

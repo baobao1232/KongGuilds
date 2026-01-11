@@ -16,7 +16,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.*;
 
-import static king.kongguilds.Gui.GuildGUI.renderCommonGuildMenu;
 
 public class Guild {
     private String name;

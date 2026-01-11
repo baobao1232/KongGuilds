@@ -1,5 +1,7 @@
 package king.kongguilds.Gui;
 
+import king.kongguilds.Manager.GuildManager;
+import king.kongguilds.Manager.ItemValueCalculator;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.Member;
 import org.bukkit.Bukkit;
@@ -144,30 +146,110 @@ public class GuildGUI {
 
     public static void openStorageGUI(Player player, Guild guild) {
 
-        // ✅ INVENTORY THẬT – đã load base64 sẵn
         Inventory storage = guild.getSharedStorageInventory();
 
-        // ✅ GUI HIỂN THỊ (36 slot)
         Inventory gui = Bukkit.createInventory(
                 new GUIHolder(GUIType.STORAGE, 0),
                 36,
                 "Kho Chung Guild " + guild.getName()
         );
 
-        // ✅ CHỈ VẼ MENU (KHÔNG LIÊN QUAN BASE64)
         renderCommonGuildMenu(gui, player, guild);
 
-        // ✅ COPY ITEM THẬT → GUI THEO SLOT MAP
         ItemStack[] realItems = storage.getContents();
 
         for (int i = 0; i < DONATE_SLOTS.length; i++) {
             ItemStack item = realItems[i];
             if (item == null || item.getType().isAir()) continue;
 
-            gui.setItem(DONATE_SLOTS[i], item.clone());
+            // ✅ GẮN SCORE ẢO Ở ĐÂY
+            gui.setItem(DONATE_SLOTS[i], applyScoreView(item));
         }
 
         player.openInventory(gui);
+    }
+
+    public static void openRequestItemGUI(Player player, Guild guild, ItemStack item) {
+
+        Inventory gui = Bukkit.createInventory(
+                new GUIHolder(GUIType.REQUEST_ITEM, 0),
+                27,
+                "Xin vật phẩm"
+        );
+
+        ItemStack preview = item.clone();
+        gui.setItem(13, preview);
+
+        double score = ItemValueCalculator.calculateItemValue(item);
+
+        gui.setItem(11, createItem(
+                Material.PAPER,
+                "§eChi phí",
+                "§7Cần: §c" + score + " điểm"
+        ));
+
+        gui.setItem(15, createItem(
+                Material.LIME_WOOL,
+                "§aXác nhận xin"
+        ));
+
+        gui.setItem(16, createItem(
+                Material.RED_WOOL,
+                "§cHuỷ"
+        ));
+
+        player.openInventory(gui);
+    }
+
+    public static void openApproveRequestGUI(
+            Player leader,
+            Guild guild,
+            GuildManager guildManager
+    ) {
+        Inventory gui = Bukkit.createInventory(
+                new GUIHolder(GUIType.APPROVE_REQUEST, 0),
+                36,
+                "Duyệt yêu cầu vật phẩm"
+        );
+
+        Map<String, List<UUID>> requests =
+                guildManager.getItemRequestMap(guild.getName());
+
+        int slot = 0;
+
+        for (Map.Entry<String, List<UUID>> entry : requests.entrySet()) {
+            String itemKey = entry.getKey();
+            List<UUID> requesters = entry.getValue();
+
+            ItemStack item = guildManager.getItemFromStorageByKey(guild, itemKey);
+            if (item == null) continue;
+
+            ItemStack view = item.clone();
+            ItemMeta meta = view.getItemMeta();
+            if (meta == null) continue;
+
+            List<String> lore = meta.hasLore()
+                    ? new ArrayList<>(meta.getLore())
+                    : new ArrayList<>();
+
+            lore.add(" ");
+            lore.add("§eNgười xin:");
+
+            for (UUID uuid : requesters) {
+                OfflinePlayer off = Bukkit.getOfflinePlayer(uuid);
+                lore.add(" §7- §a" + off.getName());
+            }
+
+            lore.add(" ");
+            lore.add("§aClick để duyệt (người đầu tiên)");
+
+            meta.setLore(lore);
+            view.setItemMeta(meta);
+
+            gui.setItem(slot++, view);
+        }
+
+        leader.openInventory(gui);
     }
 
 
@@ -186,4 +268,49 @@ public class GuildGUI {
         }
         return item;
     }
+
+    private static ItemStack applyScoreView(ItemStack original) {
+        if (original == null || original.getType().isAir()) return original;
+
+        ItemStack item = original.clone();
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return item;
+
+        double score = ItemValueCalculator.calculateItemValue(item);
+
+        List<String> lore = meta.hasLore()
+                ? new ArrayList<>(meta.getLore())
+                : new ArrayList<>();
+
+        lore.removeIf(s -> s != null && s.contains("điểm"));
+        lore.add("§7Giá trị: §e" + score + " điểm");
+
+        meta.setLore(lore);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    public static ItemStack stripAllGuildLore(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return item;
+
+        ItemStack clean = item.clone();
+        ItemMeta meta = clean.getItemMeta();
+        if (meta == null || !meta.hasLore()) return clean;
+
+        List<String> oldLore = meta.getLore();
+        List<String> newLore = new ArrayList<>();
+
+        for (String line : oldLore) {
+            // gặp mốc → dừng luôn
+            if (line != null && line.contains("Giá trị:")) {
+                break;
+            }
+            newLore.add(line);
+        }
+
+        meta.setLore(newLore.isEmpty() ? null : newLore);
+        clean.setItemMeta(meta);
+        return clean;
+    }
+
 }

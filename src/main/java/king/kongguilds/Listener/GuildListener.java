@@ -95,6 +95,21 @@ public class GuildListener implements Listener {
         if (slot == 34) {
             GuildGUI.openDonateGUI(player, guild);
         }
+
+        if (slot == 35) {
+            Member self = guild.getMembers().get(player.getUniqueId());
+            if (self == null) return;
+
+            if (!self.getRank().equalsIgnoreCase("Leader")
+                    && !self.getRank().equalsIgnoreCase("Co-Leader")) {
+                player.sendMessage("§cBạn không có quyền duyệt yêu cầu vật phẩm.");
+                return;
+            }
+
+            GuildGUI.openApproveRequestGUI(player, guild, guildManager);
+            return;
+        }
+
     }
 
     /* =========================
@@ -152,7 +167,7 @@ public class GuildListener implements Listener {
         if (rawSlot == 8) {
             GuildGUI.openGuildInfoGUI(player, guild, 0);
         }
-        if (rawSlot == 25) {
+        if (rawSlot == 26) {
             openStorage(player, guild);
         }
         if (rawSlot == 29) {
@@ -216,7 +231,7 @@ public class GuildListener implements Listener {
         if (!(e.getInventory().getHolder() instanceof GUIHolder holder)) return;
         if (holder.getType() != GUIType.STORAGE) return;
 
-        e.setCancelled(true); // ❌ CẤM MOVE ITEM
+        e.setCancelled(true);
 
         Player player = (Player) e.getWhoClicked();
         Guild guild = guildManager.getPlayerGuild(player);
@@ -224,17 +239,153 @@ public class GuildListener implements Listener {
 
         int rawSlot = e.getRawSlot();
 
-        // MENU
+        // ===== MENU =====
         if (rawSlot == 8) {
             GuildGUI.openGuildInfoGUI(player, guild, 0);
+            return;
         }
         if (rawSlot == 25) {
             GuildGUI.openStorageGUI(player, guild);
+            return;
         }
         if (rawSlot == 29) {
             player.closeInventory();
+            return;
         }
+        if (rawSlot == 34) {
+            GuildGUI.openDonateGUI(player, guild);
+            return;
+        }
+
+        // ===== CLICK ITEM TRONG STORAGE =====
+        if (!isDonateSlot(rawSlot)) return;
+
+        ItemStack clicked = e.getCurrentItem();
+        if (clicked == null || clicked.getType().isAir()) return;
+
+        // 🔥 MỞ GUI XIN ITEM
+        GuildGUI.openRequestItemGUI(player, guild, clicked);
     }
+
+    @EventHandler
+    public void onClickRequestGui(InventoryClickEvent e) {
+        if (!(e.getInventory().getHolder() instanceof GUIHolder holder)) return;
+        if (holder.getType() != GUIType.REQUEST_ITEM) return;
+
+        e.setCancelled(true);
+
+        Player player = (Player) e.getWhoClicked();
+        Guild guild = guildManager.getPlayerGuild(player);
+        if (guild == null) return;
+
+        int slot = e.getRawSlot();
+
+        if (slot == 16) { // Huỷ
+            player.closeInventory();
+            return;
+        }
+
+        if (slot != 15) return; // Chỉ confirm
+
+        ItemStack item = e.getInventory().getItem(13);
+        if (item == null) return;
+
+        double cost = ItemValueCalculator.calculateItemValue(item);
+        Member member = guild.getMembers().get(player.getUniqueId());
+
+        if (member.getScore() < cost) {
+            player.sendMessage("§cKhông đủ điểm để xin vật phẩm này!");
+            return;
+        }
+
+        // 🔥 TRỪ ĐIỂM TRƯỚC
+        guildManager.updateMemberPoints(
+                guild.getName(),
+                player.getUniqueId(),
+                (int) -cost
+        );
+
+        // 🔥 ĐÁNH DẤU ITEM ĐANG CHỜ
+        guildManager.requestItem(guild.getName(), item, player.getUniqueId());
+
+        // 🔥 SAVE NGAY – CHỐNG 2 NGƯỜI XIN
+        guildManager.saveGuildSync(guild.getName());
+
+        player.sendMessage("§aĐã gửi yêu cầu xin vật phẩm!");
+        player.closeInventory();
+    }
+
+    @EventHandler
+    public void onClickApproveRequestGui(InventoryClickEvent e) {
+        if (!(e.getInventory().getHolder() instanceof GUIHolder holder)) return;
+        if (holder.getType() != GUIType.APPROVE_REQUEST) return;
+
+        e.setCancelled(true);
+
+        Player leader = (Player) e.getWhoClicked();
+        Guild guild = guildManager.getPlayerGuild(leader);
+        if (guild == null) return;
+
+        Member info = guild.getMembers().get(leader.getUniqueId());
+        if (info == null ||
+                (!info.getRank().equalsIgnoreCase("Leader")
+                        && !info.getRank().equalsIgnoreCase("Co-Leader"))) {
+            leader.sendMessage("§cBạn không có quyền duyệt.");
+            return;
+        }
+
+        ItemStack clicked = e.getCurrentItem();
+        if (clicked == null || clicked.getType().isAir()) return;
+
+        ItemStack realItem = GuildGUI.stripAllGuildLore(clicked);
+        String key = guildManager.itemKey(realItem);
+
+        List<UUID> requesters =
+                guildManager.getItemRequestMap(guild.getName()).get(key);
+
+        if (requesters == null || requesters.isEmpty()) {
+            leader.sendMessage("§cKhông có ai xin item này.");
+            return;
+        }
+
+        UUID targetId = requesters.get(0);
+        Player target = Bukkit.getPlayer(targetId);
+        if (target == null) {
+            leader.sendMessage("§cNgười xin đang offline.");
+            return;
+        }
+
+        double score = ItemValueCalculator.calculateItemValue(realItem);
+        Member targetInfo = guild.getMembers().get(targetId);
+
+        if (targetInfo.getScore() < score) {
+            leader.sendMessage("§cNgười xin không đủ điểm.");
+            return;
+        }
+
+        // ✅ TRỪ ĐIỂM
+        guildManager.updateMemberPoints(
+                guild.getName(),
+                targetId,
+                -(int) score
+        );
+
+        // ✅ TRAO ITEM
+        target.getInventory().addItem(realItem.clone());
+        target.sendMessage("§aYêu cầu vật phẩm của bạn đã được duyệt.");
+
+        // ✅ XOÁ ITEM KHỎI KHO
+        guildManager.removeItemFromStorage(guild, realItem);
+
+        // ✅ XOÁ REQUEST
+        guildManager.clearItemRequest(guild.getName(), realItem);
+
+        guildManager.saveGuildSync(guild.getName());
+
+        // reload GUI
+        GuildGUI.openApproveRequestGUI(leader, guild, guildManager);
+    }
+
 
 //
 //    @EventHandler
@@ -297,12 +448,7 @@ public class GuildListener implements Listener {
        STORAGE OPEN HELPER
        ========================= */
     private void openStorage(Player player, Guild guild) {
-        UUID locker = guildManager.getGuildStorageLocker(guild.getName());
-        if (locker != null && !locker.equals(player.getUniqueId())) {
-            player.sendMessage(messageManager.getMessage("member", "storage_locked"));
-            return;
-        }
-        guildManager.lockGuildStorage(guild.getName(), player.getUniqueId());
         GuildGUI.openStorageGUI(player, guild);
     }
+
 }

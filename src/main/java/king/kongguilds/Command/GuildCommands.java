@@ -133,14 +133,7 @@ public class GuildCommands implements CommandExecutor {
                     return true;
                 }
 
-                UUID locker = guildManager.getGuildStorageLocker(guild.getName());
-                if (locker != null && !locker.equals(player.getUniqueId())) {
-                    player.sendMessage(messageManager.getMessage("member", "storage_locked"));
-                    return true;
-                }
-
-                guildManager.lockGuildStorage(guild.getName(), player.getUniqueId());
-                player.openInventory(guild.getSharedStorageInventory());
+                GuildGUI.openStorageGUI(player, guild);
                 player.sendMessage(messageManager.getMessage("member", "storage_opened"));
                 return true;
 
