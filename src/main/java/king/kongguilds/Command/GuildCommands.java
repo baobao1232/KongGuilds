@@ -60,6 +60,23 @@ public class GuildCommands implements CommandExecutor {
            MEMBER COMMANDS
            ========================= */
         switch (args[0].toLowerCase()) {
+            case "create":
+                switch (guildManager.createGuild(player, args[1])) {
+                    case SUCCESS -> {}
+                    case ALREADY_IN_GUILD -> player.sendMessage("§cBạn đã có guild.");
+                    case NAME_EXISTS -> player.sendMessage("§cTên guild đã tồn tại.");
+                    case INVALID_NAME -> player.sendMessage("§cTên guild không hợp lệ.");
+                }
+                return true;
+
+            case "leave":
+                guildManager.leaveGuild(player);
+                return true;
+
+            case "disband":
+                guildManager.disbandGuild(player);
+                return true;
+
 
             case "info":
                 if (guild == null) {

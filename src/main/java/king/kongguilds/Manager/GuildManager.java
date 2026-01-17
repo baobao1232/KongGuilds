@@ -76,12 +76,101 @@ public class GuildManager {
         if (!guildFolder.exists()) guildFolder.mkdirs();
     }
 
-    public boolean createGuild(String name, Player leader) {
-        if (guilds.containsKey(name)) return false;
+    public enum CreateResult {
+        SUCCESS,
+        ALREADY_IN_GUILD,
+        NAME_EXISTS,
+        INVALID_NAME
+    }
+
+    public CreateResult createGuild(Player leader, String rawName) {
+        if (getPlayerGuild(leader) != null) {
+            return CreateResult.ALREADY_IN_GUILD;
+        }
+
+        String name = rawName.trim();
+
+        if (name.length() < 3 || name.length() > 16) {
+            return CreateResult.INVALID_NAME;
+        }
+
+        if (guilds.containsKey(name)) {
+            return CreateResult.NAME_EXISTS;
+        }
+
         Guild guild = new Guild(name, leader.getUniqueId(), plugin);
         guilds.put(name, guild);
+
+        saveGuildSync(name);
+
+        leader.sendMessage("§aTạo guild §e" + name + " §athành công!");
+        return CreateResult.SUCCESS;
+    }
+
+    public boolean leaveGuild(Player player) {
+        Guild guild = getPlayerGuild(player);
+        if (guild == null) return false;
+
+        UUID uuid = player.getUniqueId();
+
+        // ❌ Leader không được leave
+        if (guild.getLeader().equals(uuid)) {
+            player.sendMessage("§cLeader không thể rời guild. Hãy disband hoặc chuyển quyền.");
+            return false;
+        }
+
+        Member member = guild.getMembers().get(uuid);
+        if (member == null) return false;
+
+        // Remove WG region
+        if (guild.getBaseID() != null) {
+            World world = BaseData.getWorldByBaseID(guild.getBaseID());
+            if (world != null) {
+                BaseRegionManager.removeMemberFromRegion(
+                        guild.getBaseID(),
+                        member.getName(),
+                        world
+                );
+            }
+        }
+
+        guild.kickMember(uuid);
+        saveGuildSync(guild.getName());
+
+        player.sendMessage("§aBạn đã rời guild §e" + guild.getName());
         return true;
     }
+
+    public boolean disbandGuild(Player leader) {
+        Guild guild = getPlayerGuild(leader);
+        if (guild == null) return false;
+
+        if (!guild.getLeader().equals(leader.getUniqueId())) {
+            leader.sendMessage("§cChỉ Leader mới có thể disband guild.");
+            return false;
+        }
+
+        // Kick toàn bộ member khỏi region
+        if (guild.getBaseID() != null) {
+            World world = BaseData.getWorldByBaseID(guild.getBaseID());
+            if (world != null) {
+                for (Member m : guild.getMembers().values()) {
+                    BaseRegionManager.removeMemberFromRegion(
+                            guild.getBaseID(),
+                            m.getName(),
+                            world
+                    );
+                }
+            }
+        }
+
+        broadcastToGuild(plugin, guild,
+                "§cGuild đã bị disband bởi §e" + leader.getName());
+
+        removeGuild(guild.getName());
+        return true;
+    }
+
 
     public void removeGuild(String name) {
         // 1. Xóa khỏi danh sách bộ nhớ
