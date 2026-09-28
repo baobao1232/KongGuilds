@@ -1249,5 +1249,36 @@ public class GuildManager {
         return null;
     }
 
+    public static void showHelp(Player player, boolean isAdmin) {
+        String prefix = "§8§m----------------§r §6§lGUILD HELP §8§m----------------";
+
+        // ===== MEMBER COMMANDS =====
+        player.sendMessage(prefix);
+        player.sendMessage("§e§l► Member Commands");
+        player.sendMessage("§7/g create <tên> §f- Tạo guild mới");
+        player.sendMessage("§7/g info §f- Xem thông tin guild");
+        player.sendMessage("§7/g invite <player> §f- Mời người chơi vào guild");
+        player.sendMessage("§7/g accept §f- Chấp nhận lời mời");
+        player.sendMessage("§7/g reject §f- Từ chối lời mời");
+        player.sendMessage("§7/g leave §f- Rời guild");
+        player.sendMessage("§7/g disband §f- Giải tán guild (Leader)");
+        player.sendMessage("§7/g donate §f- Donate item vào base guild");
+        player.sendMessage("§7/g storage §f- Mở kho guild");
+        player.sendMessage("§7/g chat [nội dung] §f- Chat guild / bật-tắt guild chat");
+
+        // ===== ADMIN COMMANDS =====
+        if (isAdmin) {
+            player.sendMessage("");
+            player.sendMessage("§c§l► Admin Commands");
+            player.sendMessage("§7/g admin reload §f- Reload guilds");
+            player.sendMessage("§7/g admin addexp <guild> <số> §f- Cộng exp cho guild");
+            player.sendMessage("§7/g admin addlevel <guild> <số> §f- Cộng level cho guild");
+            player.sendMessage("§7/g admin disband <guild> §f- Giải tán guild bất kỳ");
+            player.sendMessage("§7/g admin add <player> <guild> §f- Thêm player vào guild");
+            player.sendMessage("§7/g admin kick <player> §f- Kick player khỏi guild");
+        }
+
+        player.sendMessage("§8§m--------------------------------------------");
+    }
 
 }

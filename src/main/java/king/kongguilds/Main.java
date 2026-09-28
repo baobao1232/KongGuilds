@@ -5,7 +5,10 @@ import king.kongguilds.Base.BaseHologramManager;
 import king.kongguilds.Command.GuildCommands;
 import king.kongguilds.Config.GuildConfig;
 import king.kongguilds.License.LicenseManager;
+import king.kongguilds.Listener.BossLootListener;
 import king.kongguilds.Listener.GuildListener;
+import king.kongguilds.Listener.MythicMobDropListener;
+import king.kongguilds.Manager.BossLootManager;
 import king.kongguilds.Manager.GuildManager;
 import king.kongguilds.Manager.MessageManager;
 import king.kongguilds.Model.Guild;
@@ -20,7 +23,7 @@ public class Main extends JavaPlugin {
     private static Main instance;
     private GuildManager guildManager;
     private MessageManager messageManager;
-
+    private BossLootManager bossLootManager;
 
     @Override
     public void onEnable() {
@@ -38,21 +41,26 @@ public class Main extends JavaPlugin {
 
         createPluginFolder();
         loadPluginConfig();
-        if (!loadMessages()) return;
+
+        if (!loadMessages()) {
+            return;
+        }
 
         BaseHologramManager.cleanupOrphanHolograms();
 
         guildManager = new GuildManager(this, messageManager);
 
-        // ✅ ĐĂNG KÝ NGAY
+        // Khởi tạo BossLootManager trước khi đăng ký Listener
+        bossLootManager = new BossLootManager(this);
+
         registerCommands();
         registerListeners();
 
-        // async load dữ liệu thì để async
         guildManager.asyncLoadGuilds(() -> {
             BaseHologramManager.loadAllBaseHolograms();
             BaseHologramManager.loadAllChestHolograms();
             startTasks();
+
             getLogger().info("KongGuilds đã bật thành công!");
         });
     }
@@ -97,6 +105,8 @@ public class Main extends JavaPlugin {
 
     private void registerListeners() {
         getServer().getPluginManager().registerEvents(new GuildListener(this, guildManager, messageManager), this);
+        getServer().getPluginManager().registerEvents(new MythicMobDropListener(), this);
+        getServer().getPluginManager().registerEvents(new BossLootListener(bossLootManager), this);
     }
 
     private void startTasks() {
@@ -112,5 +122,8 @@ public class Main extends JavaPlugin {
         return this.guildManager;
     }
 
+    public BossLootManager getBossLootManager() {
+        return bossLootManager;
+    }
 
 }

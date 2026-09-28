@@ -1,4 +1,4 @@
-name: KongGuilds
+name: KongGuildsSky
 version: 1.0
 author: King
 main: king.kongguilds.Main
@@ -7,6 +7,7 @@ depend:
   - FastAsyncWorldEdit
   - DecentHolograms
   - WorldGuard
+  - MythicMobs
 commands:
   guilds:
     description: Quản lý guilds

@@ -52,7 +52,7 @@ public class GuildCommands implements CommandExecutor {
         boolean isAdmin = player.hasPermission("guild.admin");
 
         if (args.length == 0) {
-            player.sendMessage(messageManager.getMessage("member", "usage"));
+            guildManager.showHelp(player, isAdmin);
             return true;
         }
 
