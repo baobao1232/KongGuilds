@@ -8,6 +8,7 @@ import king.kongguilds.License.LicenseManager;
 import king.kongguilds.Listener.BossLootListener;
 import king.kongguilds.Listener.GuildListener;
 import king.kongguilds.Listener.MythicMobDropListener;
+import king.kongguilds.Manager.AuctionManager;
 import king.kongguilds.Manager.BossLootManager;
 import king.kongguilds.Manager.GuildManager;
 import king.kongguilds.Manager.MessageManager;
@@ -24,6 +25,7 @@ public class Main extends JavaPlugin {
     private GuildManager guildManager;
     private MessageManager messageManager;
     private BossLootManager bossLootManager;
+    private AuctionManager auctionManager;
 
     @Override
     public void onEnable() {
@@ -52,6 +54,8 @@ public class Main extends JavaPlugin {
 
         // Khởi tạo BossLootManager trước khi đăng ký Listener
         bossLootManager = new BossLootManager(this);
+
+        auctionManager = new AuctionManager(this);
 
         registerCommands();
         registerListeners();
@@ -126,4 +130,5 @@ public class Main extends JavaPlugin {
         return bossLootManager;
     }
 
+    public AuctionManager getAuctionManager() { return auctionManager; }
 }

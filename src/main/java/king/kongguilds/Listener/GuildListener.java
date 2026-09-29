@@ -1,12 +1,12 @@
 package king.kongguilds.Listener;
 
-import king.kongguilds.Gui.GUIHolder;
-import king.kongguilds.Gui.GUIType;
-import king.kongguilds.Gui.GuildGUI;
-import king.kongguilds.Gui.GuildMemberEditGUI;
+import king.kongguilds.Gui.*;
+import king.kongguilds.Main;
+import king.kongguilds.Manager.AuctionManager;
 import king.kongguilds.Manager.GuildManager;
 import king.kongguilds.Manager.ItemValueCalculator;
 import king.kongguilds.Manager.MessageManager;
+import king.kongguilds.Model.AuctionItem;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.Member;
 import org.bukkit.Bukkit;
@@ -70,6 +70,17 @@ public class GuildListener implements Listener {
 
         if (slot == 8) {
             player.closeInventory();
+            return;
+        }
+
+        if (slot == 25) {
+            GuildGUI.openAuctionGUI(
+                    player,
+                    guild,
+                    Main.getInstance()
+                            .getAuctionManager()
+                            .getGuildAuctions(guild.getName())
+            );
             return;
         }
 
@@ -317,75 +328,333 @@ public class GuildListener implements Listener {
 
     @EventHandler
     public void onClickApproveRequestGui(InventoryClickEvent e) {
-        if (!(e.getInventory().getHolder() instanceof GUIHolder holder)) return;
-        if (holder.getType() != GUIType.APPROVE_REQUEST) return;
+
+        if (!(e.getInventory().getHolder() instanceof GUIHolder holder)) {
+            return;
+        }
+
+        if (holder.getType() != GUIType.APPROVE_REQUEST) {
+            return;
+        }
 
         e.setCancelled(true);
 
-        Player leader = (Player) e.getWhoClicked();
-        Guild guild = guildManager.getPlayerGuild(leader);
-        if (guild == null) return;
-
-        Member info = guild.getMembers().get(leader.getUniqueId());
-        if (info == null ||
-                (!info.getRank().equalsIgnoreCase("Leader")
-                        && !info.getRank().equalsIgnoreCase("Co-Leader"))) {
-            leader.sendMessage("§cBạn không có quyền duyệt.");
+        if (!(e.getWhoClicked() instanceof Player leader)) {
             return;
         }
 
-        ItemStack clicked = e.getCurrentItem();
-        if (clicked == null || clicked.getType().isAir()) return;
+        Guild guild =
+                guildManager.getPlayerGuild(leader);
 
-        ItemStack realItem = GuildGUI.stripAllGuildLore(clicked);
-        String key = guildManager.itemKey(realItem);
+        if (guild == null) {
+            return;
+        }
+
+        int slot = e.getRawSlot();
+
+        // =====================================================
+        // CHECK QUYỀN
+        // =====================================================
+
+        Member info =
+                guild.getMembers()
+                        .get(leader.getUniqueId());
+
+        if (info == null
+                || (!info.getRank().equalsIgnoreCase("Leader")
+                && !info.getRank().equalsIgnoreCase("Co-Leader"))) {
+
+            leader.sendMessage(
+                    "§cBạn không có quyền duyệt."
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // MENU CHUNG
+        // =====================================================
+
+        // Quay về Guild Info
+        if (slot == 8) {
+            GuildGUI.openGuildInfoGUI(
+                    leader,
+                    guild,
+                    0
+            );
+            return;
+        }
+
+        // Thông tin căn cứ
+        if (slot == 17) {
+            // Nếu chưa có GUI căn cứ thì không làm gì
+            return;
+        }
+
+        // =====================================================
+        // AUCTION
+        // SLOT 25
+        // =====================================================
+
+        if (slot == 25) {
+
+            GuildGUI.openAuctionGUI(
+                    leader,
+                    guild,
+                    Main.getInstance()
+                            .getAuctionManager()
+                            .getGuildAuctions(
+                                    guild.getName()
+                            )
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // KHO GUILD
+        // =====================================================
+
+        if (slot == 26) {
+
+            GuildGUI.openStorageGUI(
+                    leader,
+                    guild
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // DONATE
+        // =====================================================
+
+        if (slot == 34) {
+
+            GuildGUI.openDonateGUI(
+                    leader,
+                    guild
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // DUYỆT YÊU CẦU
+        // SLOT 35
+        // =====================================================
+
+        if (slot == 35) {
+            return;
+        }
+
+        // =====================================================
+        // CLICK ITEM REQUEST
+        // =====================================================
+
+        ItemStack clicked =
+                e.getCurrentItem();
+
+        if (clicked == null
+                || clicked.getType().isAir()) {
+
+            return;
+        }
+
+        // =====================================================
+        // LẤY KEY TỪ ITEM HIỂN THỊ
+        // =====================================================
+
+        ItemStack cleanClicked =
+                GuildGUI.stripAllGuildLore(
+                        clicked
+                );
+
+        String key =
+                guildManager.itemKey(
+                        cleanClicked
+                );
+
+        // =====================================================
+        // LẤY REQUEST
+        // =====================================================
 
         List<UUID> requesters =
-                guildManager.getItemRequestMap(guild.getName()).get(key);
+                guildManager
+                        .getItemRequestMap(
+                                guild.getName()
+                        )
+                        .get(key);
 
-        if (requesters == null || requesters.isEmpty()) {
-            leader.sendMessage("§cKhông có ai xin item này.");
+        if (requesters == null
+                || requesters.isEmpty()) {
+
+            leader.sendMessage(
+                    "§cKhông có ai xin item này."
+            );
+
             return;
         }
 
-        UUID targetId = requesters.get(0);
-        Player target = Bukkit.getPlayer(targetId);
+        UUID targetId =
+                requesters.get(0);
+
+        // =====================================================
+        // NGƯỜI NHẬN
+        // =====================================================
+
+        Player target =
+                Bukkit.getPlayer(targetId);
+
         if (target == null) {
-            leader.sendMessage("§cNgười xin đang offline.");
+
+            leader.sendMessage(
+                    "§cNgười xin đang offline."
+            );
+
             return;
         }
 
-        double score = ItemValueCalculator.calculateItemValue(realItem);
-        Member targetInfo = guild.getMembers().get(targetId);
+        // =====================================================
+        // LẤY ITEM THẬT TỪ KHO
+        // =====================================================
+
+        ItemStack storedItem =
+                guildManager.getItemFromStorageByKey(
+                        guild,
+                        key
+                );
+
+        if (storedItem == null
+                || storedItem.getType().isAir()) {
+
+            leader.sendMessage(
+                    "§cKhông tìm thấy vật phẩm trong kho Guild."
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // CLEAN ITEM
+        // =====================================================
+
+        ItemStack reward =
+                GuildGUI.stripAllGuildLore(
+                        storedItem
+                );
+
+        // =====================================================
+        // TÍNH GIÁ
+        // =====================================================
+
+        double score =
+                ItemValueCalculator.calculateItemValue(
+                        storedItem
+                );
+
+        Member targetInfo =
+                guild.getMembers()
+                        .get(targetId);
+
+        if (targetInfo == null) {
+            return;
+        }
 
         if (targetInfo.getScore() < score) {
-            leader.sendMessage("§cNgười xin không đủ điểm.");
+
+            leader.sendMessage(
+                    "§cNgười xin không đủ điểm."
+            );
+
             return;
         }
 
-        // ✅ TRỪ ĐIỂM
+        // =====================================================
+        // TRỪ ĐIỂM
+        // =====================================================
+
         guildManager.updateMemberPoints(
                 guild.getName(),
                 targetId,
                 -(int) score
         );
 
-        // ✅ TRAO ITEM
-        target.getInventory().addItem(realItem.clone());
-        target.sendMessage("§aYêu cầu vật phẩm của bạn đã được duyệt.");
+        // =====================================================
+        // TRAO ITEM
+        // =====================================================
 
-        // ✅ XOÁ ITEM KHỎI KHO
-        guildManager.removeItemFromStorage(guild, realItem);
+        Map<Integer, ItemStack> leftovers =
+                target.getInventory()
+                        .addItem(
+                                reward.clone()
+                        );
 
-        // ✅ XOÁ REQUEST
-        guildManager.clearItemRequest(guild.getName(), realItem);
+        // =====================================================
+        // XOÁ ITEM KHỎI KHO
+        // =====================================================
 
-        guildManager.saveGuildSync(guild.getName());
+        guildManager.removeItemFromStorage(
+                guild,
+                storedItem
+        );
 
-        // reload GUI
-        GuildGUI.openApproveRequestGUI(leader, guild, guildManager);
+        // =====================================================
+        // XOÁ REQUEST
+        // =====================================================
+
+        guildManager.clearItemRequest(
+                guild.getName(),
+                storedItem
+        );
+
+        // =====================================================
+        // SAVE
+        // =====================================================
+
+        guildManager.saveGuildSync(
+                guild.getName()
+        );
+
+        // =====================================================
+        // THÔNG BÁO
+        // =====================================================
+
+        target.sendMessage(
+                "§aYêu cầu vật phẩm của bạn đã được duyệt."
+        );
+
+        // =====================================================
+        // ITEM THỪA
+        // =====================================================
+
+        if (!leftovers.isEmpty()) {
+
+            for (ItemStack leftover :
+                    leftovers.values()) {
+
+                if (leftover == null
+                        || leftover.getType().isAir()) {
+                    continue;
+                }
+
+                target.getWorld().dropItemNaturally(
+                        target.getLocation(),
+                        leftover
+                );
+            }
+        }
+
+        // =====================================================
+        // RELOAD GUI
+        // =====================================================
+
+        GuildGUI.openApproveRequestGUI(
+                leader,
+                guild,
+                guildManager
+        );
     }
-
 
 //
 //    @EventHandler
@@ -450,5 +719,496 @@ public class GuildListener implements Listener {
     private void openStorage(Player player, Guild guild) {
         GuildGUI.openStorageGUI(player, guild);
     }
+
+    @EventHandler
+    public void onAuctionClick(InventoryClickEvent event) {
+
+        if (!(event.getInventory().getHolder() instanceof GUIHolder holder)) {
+            return;
+        }
+
+        if (holder.getType() != GUIType.AUCTION) {
+            return;
+        }
+
+        event.setCancelled(true);
+
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+
+        Guild guild = guildManager.getPlayerGuild(player);
+
+        if (guild == null) {
+            return;
+        }
+
+        int slot = event.getRawSlot();
+
+        // =====================================================
+        // QUAY VỀ GUILD
+        // =====================================================
+
+        if (slot == 8) {
+            GuildGUI.openGuildInfoGUI(
+                    player,
+                    guild,
+                    0
+            );
+            return;
+        }
+
+        // =====================================================
+        // THÔNG TIN CĂN CỨ
+        // =====================================================
+
+        if (slot == 17) {
+            return;
+        }
+
+        // =====================================================
+        // AUCTION
+        // SLOT 25
+        // =====================================================
+
+        if (slot == 25) {
+            return;
+        }
+
+        // =====================================================
+        // KHO GUILD
+        // =====================================================
+
+        if (slot == 26) {
+            GuildGUI.openStorageGUI(
+                    player,
+                    guild
+            );
+            return;
+        }
+
+        // =====================================================
+        // DONATE
+        // =====================================================
+
+        if (slot == 34) {
+            GuildGUI.openDonateGUI(
+                    player,
+                    guild
+            );
+            return;
+        }
+
+        // =====================================================
+        // DUYỆT YÊU CẦU
+        // =====================================================
+
+        if (slot == 35) {
+
+            Member self =
+                    guild.getMembers()
+                            .get(player.getUniqueId());
+
+            if (self == null ||
+                    (!self.getRank().equalsIgnoreCase("Leader")
+                            && !self.getRank().equalsIgnoreCase("Co-Leader"))) {
+
+                player.sendMessage(
+                        "§cBạn không có quyền."
+                );
+
+                return;
+            }
+
+            GuildGUI.openApproveRequestGUI(
+                    player,
+                    guild,
+                    guildManager
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // LẤY AUCTION MANAGER
+        // =====================================================
+
+        AuctionManager auctionManager =
+                Main.getInstance()
+                        .getAuctionManager();
+
+        if (auctionManager == null) {
+
+            player.sendMessage(
+                    "§cHệ thống đấu giá chưa sẵn sàng."
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // LẤY AUCTION TỪ ITEM GUI
+        // =====================================================
+
+        AuctionItem auction =
+                auctionManager.getAuctionFromGUI(
+                        event.getInventory(),
+                        slot
+                );
+
+        if (auction == null) {
+            return;
+        }
+
+        // =====================================================
+        // KIỂM TRA AUCTION
+        // =====================================================
+
+        if (auction.isExpired()) {
+
+            player.sendMessage(
+                    "§cPhiên đấu giá này đã kết thúc."
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // KIỂM TRA MEMBER
+        // =====================================================
+
+        if (!guild.hasMember(player.getUniqueId())) {
+
+            player.sendMessage(
+                    "§cBạn không phải thành viên Guild."
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // MỞ CHI TIẾT ĐẤU GIÁ
+        // =====================================================
+
+        AuctionDetailGUI.open(
+                player,
+                guild,
+                auction
+        );
+    }
+
+    @EventHandler
+    public void onAuctionDetailClick(
+            InventoryClickEvent event
+    ) {
+
+        if (!(event.getInventory().getHolder()
+                instanceof GUIHolder holder)) {
+            return;
+        }
+
+        if (holder.getType() != GUIType.AUCTION_DETAIL) {
+            return;
+        }
+
+        event.setCancelled(true);
+
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+
+        int slot = event.getRawSlot();
+
+        AuctionManager auctionManager =
+                Main.getInstance()
+                        .getAuctionManager();
+
+        if (auctionManager == null) {
+            player.sendMessage(
+                    "§cHệ thống đấu giá chưa sẵn sàng."
+            );
+            return;
+        }
+
+        // =====================================================
+        // LẤY AUCTION TỪ ITEM SLOT 13
+        // =====================================================
+
+        AuctionItem auction =
+                auctionManager.getAuctionFromGUI(
+                        event.getInventory(),
+                        13
+                );
+
+        if (auction == null) {
+
+            player.sendMessage(
+                    "§cKhông tìm thấy phiên đấu giá."
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // LẤY GUILD CỦA PLAYER
+        // =====================================================
+
+        Guild guild = guildManager.getPlayerGuild(player);
+
+        if (guild == null) {
+            player.closeInventory();
+
+            player.sendMessage(
+                    "§cBạn không còn ở trong Guild."
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // KIỂM TRA MEMBER
+        // =====================================================
+
+        if (!guild.hasMember(
+                player.getUniqueId()
+        )) {
+
+            player.sendMessage(
+                    "§cBạn không phải thành viên Guild."
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // KIỂM TRA HẾT HẠN
+        // =====================================================
+
+        if (auction.isExpired()) {
+
+            player.closeInventory();
+
+            player.sendMessage(
+                    "§cPhiên đấu giá này đã kết thúc."
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // GIÁ HIỆN TẠI
+        // =====================================================
+
+        double current =
+                auction.getHighestBid();
+
+        double amount;
+
+        // =====================================================
+        // +100
+        // =====================================================
+
+        if (slot == 10) {
+
+            amount =
+                    current <= 0
+                            ? 100
+                            : current + 100;
+        }
+
+        // =====================================================
+        // +500
+        // =====================================================
+
+        else if (slot == 11) {
+
+            amount =
+                    current <= 0
+                            ? 500
+                            : current + 500;
+        }
+
+        // =====================================================
+        // +1000
+        // =====================================================
+
+        else if (slot == 15) {
+
+            amount =
+                    current <= 0
+                            ? 1000
+                            : current + 1000;
+        }
+
+        // =====================================================
+        // LỊCH SỬ
+        // =====================================================
+
+        else if (slot == 17) {
+
+            AuctionHistoryGUI.open(
+                    player,
+                    guild,
+                    auction
+            );
+
+            return;
+        }
+
+        // =====================================================
+        // QUAY LẠI
+        // =====================================================
+
+        else if (slot == 22) {
+
+            GuildGUI.openAuctionGUI(
+                    player,
+                    guild,
+                    auctionManager.getGuildAuctions(
+                            guild.getName()
+                    )
+            );
+
+            return;
+        }
+
+        else {
+            return;
+        }
+
+        // =====================================================
+        // ĐẶT GIÁ
+        // =====================================================
+
+        boolean success =
+                auctionManager.placeBid(
+                        player,
+                        auction.getId(),
+                        amount
+                );
+
+        if (!success) {
+            return;
+        }
+
+        player.sendMessage(
+                "§aĐã đặt giá §e$"
+                        + String.format(
+                        "%,.0f",
+                        amount
+                )
+                        + " §athành công."
+        );
+
+        // =====================================================
+        // REFRESH GUI
+        // =====================================================
+
+        AuctionItem updatedAuction =
+                auctionManager.getAuction(
+                        auction.getId()
+                );
+
+        if (updatedAuction == null) {
+            player.closeInventory();
+            return;
+        }
+
+        AuctionDetailGUI.open(
+                player,
+                guild,
+                updatedAuction
+        );
+    }
+
+    @EventHandler
+    public void onAuctionHistoryClick(
+            InventoryClickEvent event
+    ) {
+
+        if (!(event.getInventory().getHolder()
+                instanceof GUIHolder holder)) {
+
+            return;
+        }
+
+        if (holder.getType() != GUIType.AUCTION_HISTORY) {
+            return;
+        }
+
+        event.setCancelled(true);
+
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+
+        if (event.getRawSlot() != 49) {
+            return;
+        }
+
+        Guild guild =
+                guildManager.getPlayerGuild(player);
+
+        if (guild == null) {
+            player.closeInventory();
+            return;
+        }
+
+        AuctionManager auctionManager =
+                Main.getInstance()
+                        .getAuctionManager();
+
+        if (auctionManager == null) {
+            player.closeInventory();
+            return;
+        }
+
+        /*
+         * History GUI không có auction_id riêng,
+         * nên lấy auction từ item slot 4.
+         */
+        AuctionItem auction =
+                auctionManager.getAuctionFromGUI(
+                        event.getInventory(),
+                        4
+                );
+
+        if (auction == null) {
+            player.closeInventory();
+
+            player.sendMessage(
+                    "§cPhiên đấu giá không còn tồn tại."
+            );
+
+            return;
+        }
+
+        AuctionDetailGUI.open(
+                player,
+                guild,
+                auction
+        );
+    }
+
+    private String getAuctionItemName(ItemStack item) {
+
+        if (item.hasItemMeta()
+                && item.getItemMeta().hasDisplayName()) {
+
+            return item.getItemMeta().getDisplayName();
+        }
+
+        return item.getType().name();
+    }
+
+    private String formatMoney(double money) {
+
+        return String.format(
+                Locale.US,
+                "%,.0f",
+                money
+        );
+    }
+
 
 }

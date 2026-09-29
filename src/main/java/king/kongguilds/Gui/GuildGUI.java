@@ -1,18 +1,18 @@
 package king.kongguilds.Gui;
 
+import king.kongguilds.Main;
 import king.kongguilds.Manager.GuildManager;
 import king.kongguilds.Manager.ItemValueCalculator;
+import king.kongguilds.Model.AuctionItem;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.Member;
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.Material;
-import org.bukkit.OfflinePlayer;
+import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.*;
 
@@ -110,28 +110,41 @@ public class GuildGUI {
             }
         }
 
+        // Đóng / quay về
         gui.setItem(8, createItem(
                 Material.BARRIER,
                 closeName
         ));
 
+        // Thông tin căn cứ
         gui.setItem(17, createItem(
                 Material.BEACON,
                 "§bThông tin căn cứ",
                 "§7Xem căn cứ của Guild"
         ));
 
+        // Kho Guild
         gui.setItem(26, createItem(
                 Material.CHEST,
                 "§6Kho Guild",
                 "§7Kho vật phẩm chung"
         ));
 
+        // Đấu giá
+        gui.setItem(25, createItem(
+                Material.GOLD_INGOT,
+                "§6Đấu giá Guild",
+                "§7Xem các vật phẩm đang đấu giá",
+                "§7và tham gia đấu giá"
+        ));
+
+        // Donate
         gui.setItem(34, createItem(
                 Material.EMERALD_BLOCK,
                 "§aDonate vật phẩm"
         ));
 
+        // Duyệt yêu cầu
         Member self = guild.getMembers().get(player.getUniqueId());
         if (self != null &&
                 (self.getRank().equalsIgnoreCase("Leader")
@@ -212,21 +225,58 @@ public class GuildGUI {
                 "Duyệt yêu cầu vật phẩm"
         );
 
+        // =========================
+        // MENU GUILD
+        // =========================
+        renderCommonGuildMenu(gui, leader, guild);
+
+        // =========================
+        // LẤY DANH SÁCH YÊU CẦU
+        // =========================
         Map<String, List<UUID>> requests =
                 guildManager.getItemRequestMap(guild.getName());
 
-        int slot = 0;
+        // Các slot dành riêng cho item yêu cầu.
+        // Chừa các slot menu: 8, 17, 26, 34, 35
+        int[] requestSlots = {
+                0, 1, 2, 3, 4, 5, 6, 7,
+                9, 10, 11, 12, 13, 14, 15, 16,
+                18, 19, 20, 21, 22, 23, 24, 25,
+                27, 28, 29, 30, 31, 32, 33
+        };
 
+        int slotIndex = 0;
+
+        // =========================
+        // HIỂN THỊ CÁC YÊU CẦU
+        // =========================
         for (Map.Entry<String, List<UUID>> entry : requests.entrySet()) {
+
+            // Hết chỗ hiển thị
+            if (slotIndex >= requestSlots.length) {
+                break;
+            }
+
             String itemKey = entry.getKey();
             List<UUID> requesters = entry.getValue();
 
-            ItemStack item = guildManager.getItemFromStorageByKey(guild, itemKey);
-            if (item == null) continue;
+            // Lấy item thật từ kho Guild
+            ItemStack item =
+                    guildManager.getItemFromStorageByKey(guild, itemKey);
 
+            if (item == null || item.getType().isAir()) {
+                continue;
+            }
+
+            // =========================
+            // TẠO ITEM HIỂN THỊ
+            // =========================
             ItemStack view = item.clone();
+
             ItemMeta meta = view.getItemMeta();
-            if (meta == null) continue;
+            if (meta == null) {
+                continue;
+            }
 
             List<String> lore = meta.hasLore()
                     ? new ArrayList<>(meta.getLore())
@@ -235,9 +285,25 @@ public class GuildGUI {
             lore.add(" ");
             lore.add("§eNgười xin:");
 
-            for (UUID uuid : requesters) {
-                OfflinePlayer off = Bukkit.getOfflinePlayer(uuid);
-                lore.add(" §7- §a" + off.getName());
+            // Danh sách người đang xin item
+            if (requesters != null && !requesters.isEmpty()) {
+
+                for (UUID uuid : requesters) {
+
+                    OfflinePlayer off =
+                            Bukkit.getOfflinePlayer(uuid);
+
+                    String name = off.getName();
+
+                    if (name == null) {
+                        name = uuid.toString();
+                    }
+
+                    lore.add(" §7- §a" + name);
+                }
+
+            } else {
+                lore.add(" §7- Không có người xin");
             }
 
             lore.add(" ");
@@ -246,12 +312,353 @@ public class GuildGUI {
             meta.setLore(lore);
             view.setItemMeta(meta);
 
-            gui.setItem(slot++, view);
+            // =========================
+            // ĐẶT ITEM VÀO SLOT
+            // =========================
+            gui.setItem(
+                    requestSlots[slotIndex],
+                    view
+            );
+
+            slotIndex++;
         }
 
+        // =========================
+        // MỞ GUI
+        // =========================
         leader.openInventory(gui);
     }
 
+    public static void openAuctionGUI(
+            Player player,
+            Guild guild,
+            List<AuctionItem> auctions
+    ) {
+        if (guild == null) {
+            player.sendMessage("§cBạn không thuộc Guild.");
+            return;
+        }
+
+        Inventory gui = Bukkit.createInventory(
+                new GUIHolder(GUIType.AUCTION, 0),
+                36,
+                "§6§lĐấu giá Guild"
+        );
+
+        renderCommonGuildMenu(gui, player, guild);
+
+        int[] auctionSlots = {
+                0, 1, 2, 3, 4, 5, 6, 7,
+                9, 10, 11, 12, 13, 14, 15, 16,
+                18, 19, 20, 21, 22, 23, 24,
+                27, 28, 29, 30, 31, 32, 33
+        };
+
+        NamespacedKey auctionKey =
+                new NamespacedKey(Main.getInstance(), "auction_id");
+
+        int slotIndex = 0;
+
+        for (AuctionItem auction : auctions) {
+
+            if (slotIndex >= auctionSlots.length) {
+                break;
+            }
+
+            if (auction == null) {
+                continue;
+            }
+
+            ItemStack item = auction.getItem().clone();
+            ItemMeta meta = item.getItemMeta();
+
+            if (meta == null) {
+                continue;
+            }
+
+            List<String> lore = meta.hasLore()
+                    ? new ArrayList<>(meta.getLore())
+                    : new ArrayList<>();
+
+            lore.add(" ");
+            lore.add("§6§lĐẤU GIÁ");
+
+            lore.add(
+                    "§7Giá hiện tại: §e"
+                            + auction.getHighestBid()
+            );
+
+            if (auction.getHighestBidder() != null) {
+
+                OfflinePlayer bidder =
+                        Bukkit.getOfflinePlayer(
+                                auction.getHighestBidder()
+                        );
+
+                lore.add(
+                        "§7Người giữ giá: §a"
+                                + (bidder.getName() != null
+                                ? bidder.getName()
+                                : "Không rõ")
+                );
+
+            } else {
+
+                lore.add("§7Người giữ giá: §cChưa có");
+            }
+
+            // =========================
+            // THỜI GIAN
+            // =========================
+
+            lore.add(
+                    "§7Thời gian còn lại: §e"
+                            + formatAuctionTime(
+                            auction.getRemainingMillis()
+                    )
+            );
+
+            lore.add(" ");
+            lore.add("§aClick để đặt giá");
+
+            meta.setLore(lore);
+
+            // =========================
+            // GẮN AUCTION ID
+            // =========================
+
+            meta.getPersistentDataContainer().set(
+                    auctionKey,
+                    PersistentDataType.STRING,
+                    auction.getId()
+            );
+
+            item.setItemMeta(meta);
+
+            item.setAmount(
+                    Math.min(
+                            64,
+                            Math.max(1, item.getAmount())
+                    )
+            );
+
+            gui.setItem(
+                    auctionSlots[slotIndex],
+                    item
+            );
+
+            slotIndex++;
+        }
+
+        if (slotIndex == 0) {
+
+            gui.setItem(
+                    13,
+                    createItem(
+                            Material.BARRIER,
+                            "§cKhông có vật phẩm đấu giá",
+                            "§7Hiện tại Guild chưa có",
+                            "§7vật phẩm nào đang đấu giá."
+                    )
+            );
+        }
+
+        player.openInventory(gui);
+
+        // =========================
+        // AUTO REFRESH MỖI GIÂY
+        // =========================
+
+        final int[] slots = auctionSlots;
+
+        Bukkit.getScheduler().runTaskTimer(
+                Main.getInstance(),
+                () -> {
+
+                    // Người chơi đã đóng GUI
+                    if (!player.isOnline()
+                            || player.getOpenInventory().getTopInventory() != gui) {
+
+                        return;
+                    }
+
+                    for (int slot : slots) {
+
+                        ItemStack current =
+                                gui.getItem(slot);
+
+                        if (current == null
+                                || current.getType().isAir()) {
+                            continue;
+                        }
+
+                        ItemMeta currentMeta =
+                                current.getItemMeta();
+
+                        if (currentMeta == null) {
+                            continue;
+                        }
+
+                        String auctionId =
+                                currentMeta
+                                        .getPersistentDataContainer()
+                                        .get(
+                                                auctionKey,
+                                                PersistentDataType.STRING
+                                        );
+
+                        if (auctionId == null) {
+                            continue;
+                        }
+
+                        AuctionItem auction =
+                                Main.getInstance()
+                                        .getAuctionManager()
+                                        .getAuction(auctionId);
+
+                        // Auction đã kết thúc / bị xóa
+                        if (auction == null) {
+
+                            gui.setItem(slot, null);
+                            continue;
+                        }
+
+                        // =========================
+                        // TẠO LẠI ITEM
+                        // =========================
+
+                        ItemStack updated =
+                                auction.getItem().clone();
+
+                        ItemMeta updatedMeta =
+                                updated.getItemMeta();
+
+                        if (updatedMeta == null) {
+                            continue;
+                        }
+
+                        List<String> updatedLore =
+                                updatedMeta.hasLore()
+                                        ? new ArrayList<>(
+                                        updatedMeta.getLore())
+                                        : new ArrayList<>();
+
+                        updatedLore.add(" ");
+                        updatedLore.add("§6§lĐẤU GIÁ");
+
+                        updatedLore.add(
+                                "§7Giá hiện tại: §e"
+                                        + auction.getHighestBid()
+                        );
+
+                        if (auction.getHighestBidder() != null) {
+
+                            OfflinePlayer bidder =
+                                    Bukkit.getOfflinePlayer(
+                                            auction.getHighestBidder()
+                                    );
+
+                            updatedLore.add(
+                                    "§7Người giữ giá: §a"
+                                            + (bidder.getName() != null
+                                            ? bidder.getName()
+                                            : "Không rõ")
+                            );
+
+                        } else {
+
+                            updatedLore.add(
+                                    "§7Người giữ giá: §cChưa có"
+                            );
+                        }
+
+                        // =========================
+                        // COUNTDOWN
+                        // =========================
+
+                        long remaining =
+                                auction.getRemainingMillis();
+
+                        if (remaining <= 0) {
+
+                            updatedLore.add(
+                                    "§7Thời gian còn lại: §cĐã hết"
+                            );
+
+                        } else {
+
+                            updatedLore.add(
+                                    "§7Thời gian còn lại: §e"
+                                            + formatAuctionTime(remaining)
+                            );
+                        }
+
+                        updatedLore.add(" ");
+                        updatedLore.add("§aClick để đặt giá");
+
+                        updatedMeta.setLore(updatedLore);
+
+                        updatedMeta
+                                .getPersistentDataContainer()
+                                .set(
+                                        auctionKey,
+                                        PersistentDataType.STRING,
+                                        auction.getId()
+                                );
+
+                        updated.setItemMeta(updatedMeta);
+
+                        updated.setAmount(
+                                Math.min(
+                                        64,
+                                        Math.max(
+                                                1,
+                                                updated.getAmount()
+                                        )
+                                )
+                        );
+
+                        gui.setItem(slot, updated);
+                    }
+
+                },
+                20L,   // delay 1 giây
+                20L    // chạy mỗi 1 giây
+        );
+    }
+
+    private static String formatAuctionTime(long millis) {
+
+        long totalSeconds =
+                Math.max(0, millis / 1000);
+
+        long days = totalSeconds / 86400;
+
+        totalSeconds %= 86400;
+
+        long hours = totalSeconds / 3600;
+
+        totalSeconds %= 3600;
+
+        long minutes = totalSeconds / 60;
+
+        long seconds = totalSeconds % 60;
+
+        if (days > 0) {
+            return days + "d "
+                    + hours + "h "
+                    + minutes + "m";
+        }
+
+        if (hours > 0) {
+            return hours + "h "
+                    + minutes + "m "
+                    + seconds + "s";
+        }
+
+        return minutes + "m "
+                + seconds + "s";
+    }
 
     /* =========================
        ITEM HELPER
@@ -295,21 +702,47 @@ public class GuildGUI {
 
         ItemStack clean = item.clone();
         ItemMeta meta = clean.getItemMeta();
-        if (meta == null || !meta.hasLore()) return clean;
+
+        if (meta == null || !meta.hasLore()) {
+            return clean;
+        }
 
         List<String> oldLore = meta.getLore();
         List<String> newLore = new ArrayList<>();
 
         for (String line : oldLore) {
-            // gặp mốc → dừng luôn
-            if (line != null && line.contains("Giá trị:")) {
-                break;
+
+            if (line == null) {
+                continue;
             }
+
+            String stripped =
+                    ChatColor.stripColor(line);
+
+            // Xóa lore hệ thống Guild
+            if (stripped.contains("Giá trị:")) {
+                continue;
+            }
+
+            if (stripped.contains("điểm Donate")) {
+                continue;
+            }
+
+            if (stripped.contains("điểm Donate")) {
+                continue;
+            }
+
             newLore.add(line);
         }
 
-        meta.setLore(newLore.isEmpty() ? null : newLore);
+        meta.setLore(
+                newLore.isEmpty()
+                        ? null
+                        : newLore
+        );
+
         clean.setItemMeta(meta);
+
         return clean;
     }
 
