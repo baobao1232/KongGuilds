@@ -8,6 +8,8 @@ depend:
   - DecentHolograms
   - WorldGuard
   - MythicMobs
+  - Vault
+  - ExcellentEconomy
 commands:
   guilds:
     description: Quản lý guilds
