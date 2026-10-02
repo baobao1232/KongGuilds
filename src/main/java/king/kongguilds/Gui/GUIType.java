@@ -2,6 +2,7 @@ package king.kongguilds.Gui;
 
 public enum GUIType {
     GUILD_INFO,
+    GUILD_SKILLS,
     DONATE,
     STORAGE,
     REQUEST_ITEM,

@@ -29,7 +29,20 @@ public class Guild {
     private transient Inventory sharedStorageInventory;
 
     private int level = 1;
+
+    // EXP hiện tại của level
     private int exp = 0;
+
+    // Tổng điểm cống hiến tích lũy của Guild
+    // Không reset khi Guild lên level
+    private long totalContribution = 0;
+
+    // Contribution đã tiêu cho Guild Skill Tree
+    private long spentContribution = 0;
+
+    // Guild Skill Tree: skillId -> level
+    private Map<String, Integer> skillLevels = new HashMap<>();
+
     private String baseID = null;
     private double money = 0.0;
     private transient JavaPlugin plugin;
@@ -81,8 +94,18 @@ public class Guild {
         return level;
     }
 
+    public int getMaxMembers() {
+        return GuildConfig.getMaxMembers(level);
+    }
+
     public int getExpToNextLevel() {
-        int nextExp = GuildConfig.getExpForLevel(level + 1);
+
+        if (level >= GuildConfig.getMaxLevel())
+            return 0;
+
+        int nextExp =
+                GuildConfig.getExpForLevel(level + 1);
+
         return Math.max(0, nextExp - exp);
     }
 
@@ -108,16 +131,80 @@ public class Guild {
         return exp;
     }
 
+    public long getTotalContribution() {
+        return totalContribution;
+    }
+
+    public int getSkillLevel(String skillId) {
+        if (skillId == null) return 0;
+        if (skillLevels == null) skillLevels = new HashMap<>();
+        return skillLevels.getOrDefault(skillId, 0);
+    }
+
+    public Map<String, Integer> getSkillLevels() {
+        if (skillLevels == null) skillLevels = new HashMap<>();
+        return skillLevels;
+    }
+
+    public void setSkillLevel(String skillId, int level) {
+        if (skillId == null || skillId.isBlank()) return;
+        if (skillLevels == null) skillLevels = new HashMap<>();
+        if (level <= 0) {
+            skillLevels.remove(skillId);
+        } else {
+            skillLevels.put(skillId, level);
+        }
+    }
+
+    public long getAvailableContribution() {
+        return Math.max(0L, totalContribution - spentContribution);
+    }
+
+    public long getSpentContribution() {
+        return spentContribution;
+    }
+
+    public boolean spendContribution(long amount) {
+        if (amount <= 0 || getAvailableContribution() < amount) return false;
+        spentContribution += amount;
+        return true;
+    }
+
     public void addExp(int amount) {
-        if (amount <= 0) return;
-        this.exp += amount;
-        while (exp >= getNextLevelExp()) {
-            if (level >= GuildConfig.getMaxLevel()) {
-                exp = getNextLevelExp(); // cap lại EXP
-                break;
-            }
+
+        if (amount <= 0)
+            return;
+
+        // Tổng điểm cống hiến luôn tăng
+        totalContribution += amount;
+
+        // Đã max level thì không cần tăng EXP level nữa
+        if (level >= GuildConfig.getMaxLevel())
+            return;
+
+        exp += amount;
+
+        while (
+                level < GuildConfig.getMaxLevel()
+                        && exp >= getNextLevelExp()
+        ) {
+
+            // EXP cần để lên level hiện tại
+            int requiredExp = getNextLevelExp();
+
+            // Giữ lại EXP dư
+            exp -= requiredExp;
+
+            // Tăng level
             level++;
-            plugin.getLogger().info("Guild " + name + " leveled up to " + level + "!");
+
+            plugin.getLogger().info(
+                    "Guild "
+                            + name
+                            + " leveled up to "
+                            + level
+                            + "!"
+            );
         }
     }
 

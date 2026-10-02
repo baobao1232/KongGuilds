@@ -2,10 +2,7 @@ package king.kongguilds.Listener;
 
 import king.kongguilds.Gui.*;
 import king.kongguilds.Main;
-import king.kongguilds.Manager.AuctionManager;
-import king.kongguilds.Manager.GuildManager;
-import king.kongguilds.Manager.ItemValueCalculator;
-import king.kongguilds.Manager.MessageManager;
+import king.kongguilds.Manager.*;
 import king.kongguilds.Model.AuctionItem;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.Member;
@@ -21,6 +18,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -70,6 +68,11 @@ public class GuildListener implements Listener {
 
         if (slot == 8) {
             player.closeInventory();
+            return;
+        }
+
+        if (slot == 16) {
+            GuildGUI.openGuildSkillGUI(player, guild);
             return;
         }
 
@@ -138,6 +141,11 @@ public class GuildListener implements Listener {
         if (guild == null) return;
 
         int rawSlot = event.getRawSlot();
+
+        if (rawSlot == 16) {
+            GuildGUI.openGuildSkillGUI(player, guild);
+            return;
+        }
         boolean top = rawSlot < event.getInventory().getSize();
 
         ItemStack current = event.getCurrentItem();
@@ -253,6 +261,10 @@ public class GuildListener implements Listener {
         // ===== MENU =====
         if (rawSlot == 8) {
             GuildGUI.openGuildInfoGUI(player, guild, 0);
+            return;
+        }
+        if (rawSlot == 16) {
+            GuildGUI.openGuildSkillGUI(player, guild);
             return;
         }
         if (rawSlot == 25) {
@@ -382,6 +394,11 @@ public class GuildListener implements Listener {
                     guild,
                     0
             );
+            return;
+        }
+
+        if (slot == 16) {
+            GuildGUI.openGuildSkillGUI(leader, guild);
             return;
         }
 
@@ -675,6 +692,97 @@ public class GuildListener implements Listener {
 //
 //        guild.saveSharedStorage();
 //    }
+
+    /* =========================
+       GUILD SKILL TREE
+       ========================= */
+    @EventHandler
+    public void onGuildSkillClick(InventoryClickEvent event) {
+        if (!(event.getInventory().getHolder() instanceof GUIHolder holder)) return;
+        if (holder.getType() != GUIType.GUILD_SKILLS) return;
+
+        event.setCancelled(true);
+
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+
+        Guild guild = guildManager.getPlayerGuild(player);
+        if (guild == null) return;
+
+        int slot = event.getRawSlot();
+
+        if (slot == 49) {
+            GuildGUI.openGuildInfoGUI(player, guild, 0);
+            return;
+        }
+
+        ItemStack clicked = event.getCurrentItem();
+        if (clicked == null || clicked.getType().isAir() || !clicked.hasItemMeta()) return;
+
+        String skillId = clicked.getItemMeta()
+                .getPersistentDataContainer()
+                .get(new org.bukkit.NamespacedKey(plugin, "guild_skill"),
+                        org.bukkit.persistence.PersistentDataType.STRING);
+
+        if (skillId == null) return;
+
+        Member self = guild.getMembers().get(player.getUniqueId());
+        if (self == null) return;
+
+        if (!self.getRank().equalsIgnoreCase("Leader")
+                && !self.getRank().equalsIgnoreCase("Co-Leader")) {
+            player.sendMessage("§cChỉ Leader hoặc Co-Leader mới có thể nâng cấp Guild Skill.");
+            return;
+        }
+
+        GuildSkillManager.Skill skill = GuildSkillManager.get(skillId);
+        if (skill == null) return;
+
+        if (guild.getSkillLevel(skillId) >= skill.getMaxLevel()) {
+            player.sendMessage("§eSkill này đã đạt cấp tối đa.");
+            return;
+        }
+
+        if (guild.getLevel() < skill.getRow()) {
+            player.sendMessage("§cCần Guild Level " + skill.getRow() + " để nâng cấp skill này.");
+            return;
+        }
+
+        if (skill.getPrerequisite() != null
+                && guild.getSkillLevel(skill.getPrerequisite()) <= 0) {
+            GuildSkillManager.Skill req = GuildSkillManager.get(skill.getPrerequisite());
+            player.sendMessage("§cCần mở khóa " + (req == null ? skill.getPrerequisite() : req.getName()) + " trước.");
+            return;
+        }
+
+        long cost = GuildSkillManager.getUpgradeCost(guild, skillId);
+        if (guild.getAvailableContribution() < cost) {
+            player.sendMessage("§cKhông đủ điểm cống hiến. Cần " + cost + " điểm.");
+            return;
+        }
+
+        if (!GuildSkillManager.upgrade(guild, skillId)) {
+            player.sendMessage("§cKhông thể nâng cấp skill này.");
+            return;
+        }
+
+        guildManager.saveGuildSync(guild.getName());
+
+        player.sendMessage("§aĐã nâng cấp " + skill.getName()
+                + " §alên cấp " + guild.getSkillLevel(skillId) + ".");
+
+        GuildGUI.openGuildSkillGUI(player, guild);
+    }
+
+    @EventHandler
+    public void onGuildSkillJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Guild guild = guildManager.getPlayerGuild(player);
+            if (guild != null) {
+                GuildSkillManager.apply(player, guild);
+            }
+        });
+    }
 
     /* =========================
        BASE CHEST → STORAGE GUI
@@ -1210,5 +1318,45 @@ public class GuildListener implements Listener {
         );
     }
 
+    @EventHandler
+    public void testSkillTreeClick(InventoryClickEvent event) {
+
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+
+        if (!event.getView()
+                .getTitle()
+                .equals("§d§lGuild Skill Tree")) {
+            return;
+        }
+
+        event.setCancelled(true);
+
+        int slot = event.getRawSlot();
+
+        switch (slot) {
+
+            case 47: // ←
+                GuildSkillTreeTest.move(player, -1, 0);
+                break;
+
+            case 48: // ↑
+                GuildSkillTreeTest.move(player, 0, -1);
+                break;
+
+            case 49: // CAMERA - reset
+                GuildSkillTreeTest.resetCamera(player);
+                break;
+
+            case 50: // ↓
+                GuildSkillTreeTest.move(player, 0, 1);
+                break;
+
+            case 51: // →
+                GuildSkillTreeTest.move(player, 1, 0);
+                break;
+        }
+    }
 
 }

@@ -1,30 +1,23 @@
 package king.kongguilds.Command;
 
-import com.sk89q.worldedit.extent.clipboard.Clipboard;
-import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat;
-import com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats;
-import com.sk89q.worldedit.extent.clipboard.io.ClipboardReader;
 import king.kongguilds.Base.BaseData;
-import king.kongguilds.Base.BaseHologramManager;
-import king.kongguilds.Fawe.SelectedPositionsManager;
 import king.kongguilds.Gui.GuildGUI;
 import king.kongguilds.Manager.GuildManager;
+import king.kongguilds.Manager.GuildSkillTreeTest;
 import king.kongguilds.Manager.MessageManager;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.Member;
-import king.kongguilds.WorldGuard.BaseRegionManager;
+import net.kyori.adventure.key.Key;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.Location;
-import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.*;
 
@@ -227,6 +220,64 @@ public class GuildCommands implements CommandExecutor {
                     int lvl = Integer.parseInt(args[3]);
                     gLvl.addLevel(lvl);
                     player.sendMessage("§aĐã cộng " + lvl + " level cho guild.");
+                    return true;
+
+                case "test":
+                    GuildSkillTreeTest.open(player);
+                    return true;
+
+                case "test2":
+
+                    Component title =
+                            Component.text("\uE004\uE003\uE000\uE002")
+
+                                    .append(
+                                            Component.text("AdminVIP")
+                                                    .font(Key.key("minecraft", "guild_line1"))
+                                    )
+
+                                    .append(
+                                            Component.text("Lv. 5")
+                                                    .font(Key.key("minecraft", "guild_line2"))
+                                    )
+
+                                    .append(
+                                            Component.text("1.250 / 2.500 EXP")
+                                                    .font(Key.key("minecraft", "guild_line3"))
+                                    )
+
+                                    .append(
+                                            Component.text("----------------")
+                                                    .font(Key.key("minecraft", "guild_line4"))
+                                    )
+
+                                    .append(
+                                            Component.text("Chu Guild: Admin")
+                                                    .font(Key.key("minecraft", "guild_line5"))
+                                    )
+
+                                    .append(
+                                            Component.text("Thanh vien: 12/50")
+                                                    .font(Key.key("minecraft", "guild_line6"))
+                                    )
+
+                                    .append(
+                                            Component.text("Cap Guild: 5")
+                                                    .font(Key.key("minecraft", "guild_line7"))
+                                    )
+
+                                    .append(
+                                            Component.text("Tien Guild: 1.250.000")
+                                                    .font(Key.key("minecraft", "guild_line8"))
+                                    );
+
+                    Inventory inv = Bukkit.createInventory(
+                            null,
+                            54,
+                            title
+                    );
+
+                    player.openInventory(inv);
                     return true;
             }
         }

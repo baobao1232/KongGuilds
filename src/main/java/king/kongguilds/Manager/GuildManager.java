@@ -19,6 +19,9 @@ import com.sk89q.worldedit.world.block.BlockTypes;
 import eu.decentsoftware.holograms.api.holograms.Hologram;
 import king.kongguilds.Base.BaseData;
 import king.kongguilds.Base.BaseHologramManager;
+import king.kongguilds.Gui.GUIHolder;
+import king.kongguilds.Gui.GUIType;
+import king.kongguilds.Gui.GuildGUI;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.Member;
 import king.kongguilds.Model.TimedInvite;
@@ -486,36 +489,49 @@ public class GuildManager {
         return info != null && info.getRank().equalsIgnoreCase("Co-Leader");
     }
 
-    public void updateMemberPoints(String guildName, UUID memberId, int points) {
+    public void updateMemberPoints(
+            String guildName,
+            UUID memberId,
+            int points
+    ) {
+
         Guild guild = getGuild(guildName);
-        Bukkit.getLogger().info("[GuildDebug] guildName truyền vào = " + guildName);
-        Bukkit.getLogger().info("[GuildDebug] guild keys hiện có = " + guilds.keySet());
 
         if (guild == null) {
-            Bukkit.getLogger().warning("[DonateDebug] Guild null: " + guildName);
+            Bukkit.getLogger().warning(
+                    "[DonateDebug] Guild null: " + guildName
+            );
             return;
         }
 
         if (!guild.hasMember(memberId)) {
-            Bukkit.getLogger().warning("[DonateDebug] Member không tồn tại trong guild: " + memberId);
+            Bukkit.getLogger().warning(
+                    "[DonateDebug] Member không tồn tại trong guild: "
+                            + memberId
+            );
             return;
         }
 
         Member info = guild.getMembers().get(memberId);
 
         if (info == null) {
-            Bukkit.getLogger().warning("[DonateDebug] Member object null: " + memberId);
+            Bukkit.getLogger().warning(
+                    "[DonateDebug] Member object null: "
+                            + memberId
+            );
             return;
         }
 
         int oldScore = info.getScore();
         int newScore = oldScore + points;
 
-        Bukkit.getLogger().info("[DonateDebug] Update điểm cho "
-                + info.getName()
-                + " | Cũ=" + oldScore
-                + " | +=" + points
-                + " | Mới=" + newScore);
+        Bukkit.getLogger().info(
+                "[DonateDebug] Update điểm cho "
+                        + info.getName()
+                        + " | Cũ=" + oldScore
+                        + " | +=" + points
+                        + " | Mới=" + newScore
+        );
 
         Member updatedMember = new Member(
                 info.getUUID(),
@@ -525,22 +541,43 @@ public class GuildManager {
                 newScore
         );
 
-        guild.getMembers().put(memberId, updatedMember);
-
-        // 🔥 VERIFY NGAY SAU PUT
-        Member verify = guild.getMembers().get(memberId);
-        Bukkit.getLogger().info("[DonateDebug] Verify score sau update = " + verify.getScore());
+        guild.getMembers().put(
+                memberId,
+                updatedMember
+        );
     }
 
-
     public void addExpToGuild(Player player, int amount) {
+
+        if (player == null || amount <= 0)
+            return;
+
         Guild guild = getPlayerGuild(player);
+
+        if (guild == null)
+            return;
+
         String baseID = guild.getBaseID();
-        if (guild != null) {
-            guild.addExp(amount);
-            saveGuildSync(guild.getName());
-            BaseHologramManager.updateBaseHologram(baseID, guild);
+
+        // addExp() sẽ:
+        // 1. Cộng totalContribution
+        // 2. Cộng EXP level hiện tại
+        // 3. Xử lý level up
+        // 4. Giữ lại EXP dư
+        guild.addExp(amount);
+
+        saveGuildSync(guild.getName());
+
+        if (baseID != null && !baseID.isEmpty()) {
+            BaseHologramManager.updateBaseHologram(
+                    baseID,
+                    guild
+            );
         }
+
+        // Refresh GUI SAU KHI score + EXP + level
+        // đã được cập nhật đầy đủ
+        refreshGuildGUIs(guild);
     }
 
     public void toggleGuildChat(Player player) {
@@ -1247,6 +1284,35 @@ public class GuildManager {
         }
 
         return null;
+    }
+
+    private void refreshGuildGUIs(Guild guild) {
+
+        if (guild == null)
+            return;
+
+        for (UUID memberId : guild.getMembers().keySet()) {
+
+            Player player = Bukkit.getPlayer(memberId);
+
+            if (player == null || !player.isOnline())
+                continue;
+
+            Inventory inventory =
+                    player.getOpenInventory().getTopInventory();
+
+            if (!(inventory.getHolder() instanceof GUIHolder holder))
+                continue;
+
+            if (holder.getType() != GUIType.GUILD_INFO
+                    && holder.getType() != GUIType.DONATE)
+                continue;
+
+            GuildGUI.refreshGuildInfoGUI(
+                    player,
+                    guild
+            );
+        }
     }
 
     public static void showHelp(Player player, boolean isAdmin) {

@@ -1,7 +1,9 @@
 package king.kongguilds.Gui;
 
+import king.kongguilds.Config.GuildConfig;
 import king.kongguilds.Main;
 import king.kongguilds.Manager.GuildManager;
+import king.kongguilds.Manager.GuildSkillManager;
 import king.kongguilds.Manager.ItemValueCalculator;
 import king.kongguilds.Model.AuctionItem;
 import king.kongguilds.Model.Guild;
@@ -13,6 +15,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
 
@@ -53,6 +56,136 @@ public class GuildGUI {
 
         renderCommonGuildMenu(donate, player, guild);
         player.openInventory(donate);
+    }
+
+    /* =========================
+       GUILD SKILL TREE
+       ========================= */
+    public static void openGuildSkillGUI(Player player, Guild guild) {
+        if (guild == null) {
+            player.sendMessage("§cBạn không thuộc Guild.");
+            return;
+        }
+
+        Inventory gui = Bukkit.createInventory(
+                new GUIHolder(GUIType.GUILD_SKILLS, 0),
+                54,
+                "§5§lGuild Skill Tree"
+        );
+
+        gui.setItem(4, createItem(
+                Material.NETHER_STAR,
+                "§d§lĐIỂM CỐNG HIẾN",
+                "§7Tổng đã đóng góp: §f" + guild.getTotalContribution(),
+                "§7Đang có thể dùng: §a" + guild.getAvailableContribution(),
+                "§7Đã dùng cho Skill: §e" + guild.getSpentContribution()
+        ));
+
+        gui.setItem(49, createItem(
+                Material.BARRIER,
+                "§cQuay về Guild"
+        ));
+
+        String[] branches = {"WAR", "FORTRESS", "ARCANE", "DEVELOPMENT"};
+        Material[] branchMaterials = {
+                Material.IRON_SWORD, Material.SHIELD, Material.ENCHANTING_TABLE, Material.OAK_SAPLING
+        };
+        int[] columns = {1, 3, 5, 7};
+
+        for (int i = 0; i < branches.length; i++) {
+            gui.setItem(columns[i], createItem(
+                    branchMaterials[i],
+                    branchName(branches[i]),
+                    "§7Cấp Guild hiện tại: §a" + guild.getLevel()
+            ));
+
+            List<GuildSkillManager.Skill> skills =
+                    GuildSkillManager.getBranch(branches[i]);
+
+            for (int j = 0; j < skills.size(); j++) {
+                int slot = (j + 1) * 9 + columns[i];
+                gui.setItem(slot, createSkillItem(guild, skills.get(j)));
+            }
+        }
+
+        player.openInventory(gui);
+    }
+
+    private static String branchName(String branch) {
+        return switch (branch) {
+            case "WAR" -> "§c§l⚔ WAR";
+            case "FORTRESS" -> "§b§l🛡 FORTRESS";
+            case "ARCANE" -> "§d§l🔮 ARCANE";
+            default -> "§a§l🌲 DEVELOPMENT";
+        };
+    }
+
+    private static ItemStack createSkillItem(
+            Guild guild,
+            GuildSkillManager.Skill skill
+    ) {
+        int level = guild.getSkillLevel(skill.getId());
+        boolean max = level >= skill.getMaxLevel();
+        boolean can = GuildSkillManager.canUpgrade(guild, skill.getId());
+        long cost = GuildSkillManager.getUpgradeCost(guild, skill.getId());
+
+        Material material = switch (skill.getBranch()) {
+            case "WAR" -> Material.IRON_SWORD;
+            case "FORTRESS" -> Material.SHIELD;
+            case "ARCANE" -> Material.AMETHYST_SHARD;
+            default -> Material.EXPERIENCE_BOTTLE;
+        };
+
+        String current = formatSkillValue(skill, level);
+        String next = formatSkillValue(skill, Math.min(level + 1, skill.getMaxLevel()));
+
+        List<String> lore = new ArrayList<>();
+        lore.add(" ");
+        lore.add("§7Cấp: §f" + level + " §8/ §f" + skill.getMaxLevel());
+        lore.add("§7Hiện tại: §a" + current);
+
+        if (!max) {
+            lore.add("§7Cấp kế: §e" + next);
+            lore.add("§7Chi phí: §6" + cost + " điểm");
+            lore.add(" ");
+
+            if (skill.getPrerequisite() != null
+                    && guild.getSkillLevel(skill.getPrerequisite()) <= 0) {
+                GuildSkillManager.Skill req = GuildSkillManager.get(skill.getPrerequisite());
+                lore.add("§cCần mở khóa: §f" + (req == null ? skill.getPrerequisite() : req.getName()));
+            } else if (guild.getLevel() < skill.getRow()) {
+                lore.add("§cCần Guild Level " + skill.getRow());
+            } else if (guild.getAvailableContribution() < cost) {
+                lore.add("§cKhông đủ điểm cống hiến");
+            } else {
+                lore.add("§aClick để nâng cấp");
+            }
+        } else {
+            lore.add(" ");
+            lore.add("§6§lĐÃ ĐẠT CẤP TỐI ĐA");
+        }
+
+        ItemStack item = createItem(material, skill.getName(), lore.toArray(new String[0]));
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.getPersistentDataContainer().set(
+                    new NamespacedKey(Main.getInstance(), "guild_skill"),
+                    PersistentDataType.STRING,
+                    skill.getId()
+            );
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    private static String formatSkillValue(
+            GuildSkillManager.Skill skill,
+            int level
+    ) {
+        double value = skill.getPerLevel() * level;
+        if (skill.isPercent()) return String.format(Locale.US, "+%.2f%%", value);
+        if (Math.abs(value - Math.rint(value)) < 0.0001) return "+" + (long) value;
+        return String.format(Locale.US, "+%.2f", value);
     }
 
     /* =========================
@@ -117,10 +250,17 @@ public class GuildGUI {
         ));
 
         // Thông tin căn cứ
-        gui.setItem(17, createItem(
-                Material.BEACON,
-                "§bThông tin căn cứ",
-                "§7Xem căn cứ của Guild"
+        gui.setItem(
+                17,
+                createGuildStatsItem(guild)
+        );
+
+        // Skill Tree
+        gui.setItem(16, createItem(
+                Material.ENCHANTED_BOOK,
+                "§d§lGuild Skill Tree",
+                "§7Nâng cấp kỹ năng chung của Guild",
+                "§7Dùng điểm cống hiến để nâng cấp"
         ));
 
         // Kho Guild
@@ -746,4 +886,111 @@ public class GuildGUI {
         return clean;
     }
 
+    private static ItemStack createGuildStatsItem(Guild guild) {
+
+        int online = 0;
+
+        for (UUID uuid : guild.getMembers().keySet()) {
+
+            Player player = Bukkit.getPlayer(uuid);
+
+            if (player != null && player.isOnline()) {
+                online++;
+            }
+        }
+
+        OfflinePlayer leader =
+                Bukkit.getOfflinePlayer(
+                        guild.getLeader()
+                );
+
+        String leaderName =
+                leader.getName() != null
+                        ? leader.getName()
+                        : "Không rõ";
+
+        int memberCount =
+                guild.getMembers().size();
+
+        int maxMembers =
+                GuildConfig.getMaxMembers(
+                        guild.getLevel()
+                );
+
+        int currentExp =
+                guild.getExp();
+
+        int nextLevelExp =
+                guild.getNextLevelExp();
+
+        int expRemaining =
+                guild.getExpToNextLevel();
+
+        return createItem(
+                Material.BEACON,
+                "§b§lTHÔNG TIN GUILD",
+
+                " ",
+                "§7Guild       §f" + guild.getName(),
+                "§7Chủ Guild   §e" + leaderName,
+
+                " ",
+                "§7Cấp Guild   §a" + guild.getLevel(),
+                "§7EXP         §b"
+                        + currentExp
+                        + " §8/ §b"
+                        + nextLevelExp,
+                "§7Còn thiếu   §e"
+                        + expRemaining
+                        + " EXP",
+
+                " ",
+                "§7Thành viên  §f"
+                        + memberCount
+                        + " §8/ §f"
+                        + maxMembers,
+                "§7Trực tuyến   §a"
+                        + online
+                        + " §7người"
+        );
+    }
+
+    public static void refreshGuildInfoGUI(
+            Player player,
+            Guild guild
+    ) {
+        if (player == null
+                || guild == null
+                || !player.isOnline()) {
+            return;
+        }
+
+        Inventory gui =
+                player.getOpenInventory().getTopInventory();
+
+        if (!(gui.getHolder() instanceof GUIHolder holder)) {
+            return;
+        }
+
+        if (holder.getType() != GUIType.GUILD_INFO
+                && holder.getType() != GUIType.DONATE) {
+            return;
+        }
+
+        int page = holder.getPage();
+
+        // Cập nhật danh sách thành viên
+        renderMemberList(
+                gui,
+                guild,
+                page
+        );
+
+        // Cập nhật thông tin Guild
+        renderCommonGuildMenu(
+                gui,
+                player,
+                guild
+        );
+    }
 }

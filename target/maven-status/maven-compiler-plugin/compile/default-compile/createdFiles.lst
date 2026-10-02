@@ -1,3 +1,4 @@
+king\kongguilds\Manager\GuildSkillManager$Skill.class
 king\kongguilds\Listener\GuildListener.class
 king\kongguilds\Manager\BossLootManager$1.class
 king\kongguilds\Manager\GuildManager$1.class
@@ -38,13 +39,16 @@ king\kongguilds\Manager\GuildManager$UpgradeRequirement.class
 king\kongguilds\Model\Rank.class
 king\kongguilds\Model\Guild$RankType.class
 king\kongguilds\WorldGuard\BaseRegionManager.class
+king\kongguilds\Manager\GuildSkillTreeTest.class
 king\kongguilds\Model\AuctionItem.class
 king\kongguilds\Model\TimedInvite.class
 king\kongguilds\Base\BaseData.class
 king\kongguilds\Manager\GuildManager$4$1.class
+king\kongguilds\Manager\GuildSkillManager.class
 king\kongguilds\Manager\GuildManager.class
 king\kongguilds\Manager\ItemStackSerializer.class
 king\kongguilds\Manager\GuildManager$CreateResult.class
 king\kongguilds\Gui\GUIHolder.class
+king\kongguilds\Manager\GuildSkillTreeTest$Point.class
 king\kongguilds\Base\BaseData$LocationAdapter.class
 king\kongguilds\Manager\GuildManager$3.class

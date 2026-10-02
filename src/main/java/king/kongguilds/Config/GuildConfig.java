@@ -13,6 +13,9 @@ public class GuildConfig {
     private static final Map<Integer, Integer> levelExpMap =
             new HashMap<>();
 
+    private static final Map<Integer, Integer> maxMembersMap =
+            new HashMap<>();
+
     private static final Set<String> worldBossNames =
             new HashSet<>();
 
@@ -79,6 +82,26 @@ public class GuildConfig {
                     name.toLowerCase()
             );
         }
+
+        ConfigurationSection memberSection =
+                plugin.getConfig()
+                        .getConfigurationSection("guild-max-members");
+
+        maxMembersMap.clear();
+
+        if (memberSection != null) {
+
+            for (String key : memberSection.getKeys(false)) {
+
+                int level = Integer.parseInt(key);
+                int maxMembers = memberSection.getInt(key);
+
+                maxMembersMap.put(
+                        level,
+                        maxMembers
+                );
+            }
+        }
     }
 
     // =========================================================
@@ -99,6 +122,14 @@ public class GuildConfig {
                 .stream()
                 .max(Integer::compare)
                 .orElse(1);
+    }
+
+    public static int getMaxMembers(int level) {
+
+        return maxMembersMap.getOrDefault(
+                level,
+                0
+        );
     }
 
     // =========================================================
@@ -154,4 +185,6 @@ public class GuildConfig {
         return isWorldBoss(internalName)
                 || isGuildBoss(internalName);
     }
+
+
 }
