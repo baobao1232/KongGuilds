@@ -1,5 +1,6 @@
 C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\TaskManager\TaskManager.java
 C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\Gui\BossLootGUI.java
+C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\Manager\GuildSkillManager.java
 C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\Model\BidHistory.java
 C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\WorldGuard\BaseRegionManager.java
 C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\Listener\BossLootListener.java
@@ -10,6 +11,7 @@ C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\Model\Me
 C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\Base\BaseHologramManager.java
 C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\Gui\AuctionHistoryGUI.java
 C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\Gui\AuctionDetailGUI.java
+C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\Gui\GuiSkillTree.java
 C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\Command\GuildCommands.java
 C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\Manager\UUIDAdapter.java
 C:\Users\Admin\IdeaProjects\KongGuildsSky\src\main\java\king\kongguilds\Model\AuctionItem.java

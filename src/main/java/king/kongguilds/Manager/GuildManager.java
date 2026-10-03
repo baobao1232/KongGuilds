@@ -136,7 +136,7 @@ public class GuildManager {
                 );
             }
         }
-
+        GuildSkillManager.remove(player);
         guild.kickMember(uuid);
         saveGuildSync(guild.getName());
 
@@ -156,6 +156,7 @@ public class GuildManager {
         // Kick toàn bộ member khỏi region
         if (guild.getBaseID() != null) {
             World world = BaseData.getWorldByBaseID(guild.getBaseID());
+
             if (world != null) {
                 for (Member m : guild.getMembers().values()) {
                     BaseRegionManager.removeMemberFromRegion(
@@ -167,13 +168,25 @@ public class GuildManager {
             }
         }
 
-        broadcastToGuild(plugin, guild,
-                "§cGuild đã bị disband bởi §e" + leader.getName());
+        // REMOVE GUILD SKILLS CỦA TẤT CẢ MEMBER ONLINE
+        for (UUID memberId : guild.getMembers().keySet()) {
+            Player member = Bukkit.getPlayer(memberId);
+
+            if (member != null && member.isOnline()) {
+                GuildSkillManager.remove(member);
+            }
+        }
+
+        broadcastToGuild(
+                plugin,
+                guild,
+                "§cGuild đã bị disband bởi §e" + leader.getName()
+        );
 
         removeGuild(guild.getName());
+
         return true;
     }
-
 
     public void removeGuild(String name) {
         // 1. Xóa khỏi danh sách bộ nhớ
@@ -336,6 +349,13 @@ public class GuildManager {
                 rank = Guild.RankType.MEMBER;
             }
             guild.addMember(memberId, playerName, rank, memberType, points);
+
+            Player target = Bukkit.getPlayer(memberId);
+
+            if (target != null && target.isOnline()) {
+                GuildSkillManager.apply(target, guild);
+            }
+
             if (guild.getBaseID() != null && !guild.getBaseID().isEmpty()) {
                 String baseID = guild.getBaseID();
                 World world = BaseData.getWorldByBaseID(guild.getBaseID());
@@ -354,18 +374,36 @@ public class GuildManager {
         if (guild == null || !guild.hasMember(targetId)) return false;
 
         Member member = guild.getMembers().get(targetId);
+
         World world = BaseData.getWorldByBaseID(guild.getBaseID());
+
         if (world != null) {
-            BaseRegionManager.removeMemberFromRegion(guild.getBaseID(), member.getName(), world);
+            BaseRegionManager.removeMemberFromRegion(
+                    guild.getBaseID(),
+                    member.getName(),
+                    world
+            );
         } else {
-            Bukkit.getLogger().info("Không tìm thấy world cho baseID: " + guild.getBaseID());
+            Bukkit.getLogger().info(
+                    "Không tìm thấy world cho baseID: " + guild.getBaseID()
+            );
         }
 
+        // Nếu đang online → tháo Guild Skill
+        Player target = Bukkit.getPlayer(targetId);
+
+        if (target != null && target.isOnline()) {
+            GuildSkillManager.remove(target);
+        }
+
+        // Sau đó mới kick khỏi Guild
         guild.kickMember(targetId);
+
+        // Lưu Guild
+        saveGuildSync(guild.getName());
+
         return true;
     }
-
-
 
     public void kickMember(Player kicker, String guildName, UUID targetId) {
         Guild guild = getGuild(guildName);
@@ -413,7 +451,14 @@ public class GuildManager {
             }
         }
 
+        Player target = Bukkit.getPlayer(targetId);
+
+        if (target != null && target.isOnline()) {
+            GuildSkillManager.remove(target);
+        }
+
         guild.kickMember(targetId);
+        saveGuildSync(guild.getName());
         kicker.sendMessage("§aĐã kick thành viên " + targetInfo.getName());
     }
 
@@ -975,7 +1020,7 @@ public class GuildManager {
         if (storage == null) return null;
 
         for (ItemStack item : storage.getContents()) {
-            if (item == null || item.getType().isAir()) continue;
+            if (item == null || item.getType() == Material.AIR) continue;
 
             if (itemKey(item).equals(key)) {
                 return item;

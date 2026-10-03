@@ -8,20 +8,38 @@ import king.kongguilds.Manager.ItemValueCalculator;
 import king.kongguilds.Model.AuctionItem;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.Member;
-import org.bukkit.*;
+import net.md_5.bungee.api.ChatColor;
+import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
 
 import static king.kongguilds.Manager.GuildManager.DONATE_SLOTS;
 
 public class GuildGUI {
+
+   /* =========================
+   GUILD SKILL TREE
+   ========================= */
+    public static void openGuildSkillTree(
+            Player player,
+            Guild guild
+    ) {
+        if (guild == null) {
+            player.sendMessage("§cBạn không thuộc Guild.");
+            return;
+        }
+
+        GuiSkillTree.open(player, guild);
+    }
 
     /* =========================
        MAIN GUILD INFO GUI
@@ -132,7 +150,7 @@ public class GuildGUI {
         Material material = switch (skill.getBranch()) {
             case "WAR" -> Material.IRON_SWORD;
             case "FORTRESS" -> Material.SHIELD;
-            case "ARCANE" -> Material.AMETHYST_SHARD;
+            case "ARCANE" -> Material.EMERALD;
             default -> Material.EXPERIENCE_BOTTLE;
         };
 
@@ -313,7 +331,7 @@ public class GuildGUI {
 
         for (int i = 0; i < DONATE_SLOTS.length; i++) {
             ItemStack item = realItems[i];
-            if (item == null || item.getType().isAir()) continue;
+            if (item == null || item.getType() == Material.AIR) continue;
 
             // ✅ GẮN SCORE ẢO Ở ĐÂY
             gui.setItem(DONATE_SLOTS[i], applyScoreView(item));
@@ -404,7 +422,7 @@ public class GuildGUI {
             ItemStack item =
                     guildManager.getItemFromStorageByKey(guild, itemKey);
 
-            if (item == null || item.getType().isAir()) {
+            if (item == null || item.getType() == Material.AIR) {
                 continue;
             }
 
@@ -628,7 +646,7 @@ public class GuildGUI {
                                 gui.getItem(slot);
 
                         if (current == null
-                                || current.getType().isAir()) {
+                                || current.getType() == Material.AIR) {
                             continue;
                         }
 
@@ -817,7 +835,7 @@ public class GuildGUI {
     }
 
     private static ItemStack applyScoreView(ItemStack original) {
-        if (original == null || original.getType().isAir()) return original;
+        if (original == null || original.getType() == Material.AIR) return original;
 
         ItemStack item = original.clone();
         ItemMeta meta = item.getItemMeta();

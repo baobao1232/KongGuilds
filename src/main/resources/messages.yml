@@ -1,0 +1,106 @@
+# =========================================================
+# KongGuilds - Messages
+# =========================================================
+
+member:
+  only_players: "&cLệnh này chỉ có thể sử dụng bởi người chơi."
+  not_in_guild: "&cBạn chưa tham gia guild nào."
+  player_not_found: "&cKhông tìm thấy người chơi."
+  storage_opened: "&aĐã mở kho guild."
+  accept_success: "&aĐã xử lý lời mời guild."
+  reject_success: "&eĐã từ chối lời mời guild."
+
+  create_usage: "&cSử dụng: /g create <tên>"
+  guild_already_exists: "&cTên guild đã tồn tại."
+  already_in_guild: "&cBạn đã có guild."
+  invalid_guild_name: "&cTên guild phải từ 3-16 ký tự."
+
+  invite_usage: "&cSử dụng: /g invite <player>"
+  member_data_not_found: "&cKhông tìm thấy thông tin thành viên."
+  no_invite_permission: "&cBạn không có quyền mời thành viên."
+  target_already_in_guild: "&cNgười chơi này đã có guild."
+  invite_success: "&aĐã mời &e{player} &avào guild."
+  invite_received: "&eBạn được mời vào guild &a{guild}&e."
+  invite_accept_hint: "&eDùng &a/g accept &ehoặc &c/g reject"
+
+  kick_usage: "&cSử dụng: /g kick <player>"
+  no_kick_permission: "&cBạn không có quyền kick."
+  member_not_found: "&cKhông tìm thấy thành viên &e{player}&c."
+  cannot_kick_leader: "&cKhông thể kick Leader."
+  cannot_kick_self: "&cBạn không thể tự kick mình."
+
+  no_base: "&cGuild của bạn chưa sở hữu base."
+  must_be_in_base: "&cBạn phải đứng trong base guild để donate."
+  base_data_not_found: "&cKhông tìm thấy dữ liệu base."
+
+  guild_base_header: "&6&l=== GUILD BASE ==="
+  guild_base_name: "&7Guild: &f{guild}"
+  guild_base_id: "&7Base ID: &f{base_id}"
+  guild_base_level: "&7Base Level: &e{level}"
+  guild_level: "&7Guild Level: &e{level}"
+  guild_members: "&7Members: &f{members}&7/&f{max_members}"
+  base_max_level: "&eBase đã đạt level tối đa."
+  base_upgrade_max_level: "&cBase đã đạt level tối đa."
+  base_upgrade_permission: "&cChỉ Leader hoặc Co-Leader mới có thể nâng cấp base."
+  base_upgrade_not_ready: "&cGuild chưa đủ điều kiện nâng cấp base."
+  base_upgrade_start: "&eĐang nâng cấp base từ level &6{current}&e sang &6{next}&e..."
+  base_usage: "&cSử dụng: /g base <info|requirements|upgrade>"
+
+admin:
+  no_permission: "&cBạn không có quyền sử dụng lệnh admin."
+
+  reload_guild_success: "&aReload guild data thành công!"
+  reload_messages_success: "&aReload messages thành công."
+  reload_skills_success: "&aReload skill tree thành công."
+  reload_failed: "&cReload thất bại."
+
+  guild_list_header: "&6&l=== GUILD LIST ==="
+  no_guilds: "&eHiện không có guild nào."
+  guild_list_entry: "&e{guild} &7| Lv.&f{level} &7| Members: &f{members}&7/&f{max_members}"
+
+  save_usage: "&cSử dụng: /g admin save <guild>"
+  guild_not_found: "&cKhông tìm thấy guild &e{guild}&c."
+  guild_saved: "&aĐã save guild &e{guild}&a."
+
+  add_usage: "&cSử dụng: /g admin add <player> <guild>"
+  player_must_be_online: "&cPlayer phải đang online."
+  player_already_in_guild: "&cPlayer này đã thuộc guild."
+  guild_full: "&cGuild đã đạt giới hạn thành viên."
+  member_added: "&aĐã thêm &e{player} &avào guild &e{guild}"
+  member_added_target: "&aBạn đã được admin thêm vào guild &e{guild}"
+
+  admin_kick_usage: "&cSử dụng: /g admin kick <guild> <player>"
+  admin_member_not_found: "&cKhông tìm thấy member &e{player} &ctrong guild."
+  admin_kick_failed: "&cKick member thất bại."
+  admin_kick_success: "&aĐã kick &e{player} &akhỏi guild &e{guild}"
+  admin_kick_target: "&cBạn đã bị admin kick khỏi guild &e{guild}"
+
+  disband_usage: "&cSử dụng: /g admin disband <guild>"
+  disband_success: "&aĐã xoá guild &e{guild} &athành công."
+
+  addexp_usage: "&cSử dụng: /g admin addexp <guild> <amount>"
+  addexp_success: "&aĐã cộng &e{amount} EXP &acho guild &e{guild}"
+
+  addlevel_usage: "&cSử dụng: /g admin addlevel <guild> <amount>"
+  addlevel_success: "&aĐã cộng &e{amount} level &acho guild &e{guild}"
+
+  addpoints_usage: "&cSử dụng: /g admin addpoints <guild> <player> <amount>"
+  addpoints_success_add: "&aĐã cộng &e{amount} &điểm cho &e{player}"
+  addpoints_success_remove: "&aĐã trừ &e{amount} &điểm cho &e{player}"
+
+  help_header: "&8&m-------------------------------"
+  help_title: "&6&lGUILD ADMIN"
+  help_list: "&e/g admin list"
+  help_save: "&e/g admin save <guild>"
+  help_add: "&e/g admin add <player> <guild>"
+  help_kick: "&e/g admin kick <guild> <player>"
+  help_disband: "&e/g admin disband <guild>"
+  help_addexp: "&e/g admin addexp <guild> <amount>"
+  help_addlevel: "&e/g admin addlevel <guild> <amount>"
+  help_addpoints: "&e/g admin addpoints <guild> <player> <amount>"
+  help_reload: "&e/g admin reload"
+
+system:
+  create_usage: "&cSử dụng: /g create <tên>"
+  unknown_command: "&cLệnh không hợp lệ."
+  invalid_number: "&c{type} phải là số nguyên."

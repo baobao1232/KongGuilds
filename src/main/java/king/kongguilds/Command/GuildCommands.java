@@ -3,45 +3,58 @@ package king.kongguilds.Command;
 import king.kongguilds.Base.BaseData;
 import king.kongguilds.Gui.GuildGUI;
 import king.kongguilds.Manager.GuildManager;
-import king.kongguilds.Manager.GuildSkillTreeTest;
+import king.kongguilds.Manager.GuildSkillManager;
 import king.kongguilds.Manager.MessageManager;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.Member;
-import net.kyori.adventure.key.Key;
-import net.kyori.adventure.text.Component;
+import king.kongguilds.Main;
+
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.UUID;
 
 public class GuildCommands implements CommandExecutor {
 
+    private final Main plugin;
     private final GuildManager guildManager;
     private final MessageManager messageManager;
-    private final JavaPlugin plugin;
 
-    public GuildCommands(JavaPlugin plugin, GuildManager guildManager, MessageManager messageManager) {
+    public GuildCommands(
+            Main plugin,
+            GuildManager guildManager,
+            MessageManager messageManager
+    ) {
         this.plugin = plugin;
         this.guildManager = guildManager;
         this.messageManager = messageManager;
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+    public boolean onCommand(
+            CommandSender sender,
+            Command command,
+            String label,
+            String[] args
+    ) {
 
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(messageManager.getMessage("member", "only_players"));
+            sender.sendMessage(
+                    messageManager.getMessage(
+                            "member",
+                            "only_players"
+                    )
+            );
             return true;
         }
 
-        Guild guild = guildManager.getPlayerGuild(player);
         boolean isAdmin = player.hasPermission("guild.admin");
 
         if (args.length == 0) {
@@ -49,240 +62,1226 @@ public class GuildCommands implements CommandExecutor {
             return true;
         }
 
-        /* =========================
-           MEMBER COMMANDS
-           ========================= */
-        switch (args[0].toLowerCase()) {
-            case "create":
-                switch (guildManager.createGuild(player, args[1])) {
-                    case SUCCESS -> {}
-                    case ALREADY_IN_GUILD -> player.sendMessage("§cBạn đã có guild.");
-                    case NAME_EXISTS -> player.sendMessage("§cTên guild đã tồn tại.");
-                    case INVALID_NAME -> player.sendMessage("§cTên guild không hợp lệ.");
-                }
+        String sub = args[0].toLowerCase();
+
+        /* =========================================================
+           CREATE
+           /g create <name>
+           ========================================================= */
+
+        if (sub.equals("create")) {
+
+            if (args.length < 2) {
+                player.sendMessage(messageManager.getMessage("member", "create_usage"));
                 return true;
+            }
 
-            case "leave":
-                guildManager.leaveGuild(player);
-                return true;
+            String name = String.join(
+                    " ",
+                    Arrays.copyOfRange(args, 1, args.length)
+            );
 
-            case "disband":
-                guildManager.disbandGuild(player);
-                return true;
+            switch (guildManager.createGuild(player, name)) {
 
+                case SUCCESS:
+                    break;
 
-            case "info":
-                if (guild == null) {
-                    player.sendMessage(messageManager.getMessage("member", "not_in_guild"));
-                    return true;
-                }
-                GuildGUI.openGuildInfoGUI(player, guild, 0);
-                return true;
-            case "invite":
-                if (guild == null) {
-                    player.sendMessage(messageManager.getMessage("member", "not_in_guild"));
-                    return true;
-                }
+                case ALREADY_IN_GUILD:
+                    player.sendMessage(messageManager.getMessage("member", "already_in_guild"));
+                    break;
 
-                if (args.length < 2) {
-                    player.sendMessage("§cSử dụng: /g invite <player>");
-                    return true;
-                }
+                case NAME_EXISTS:
+                    player.sendMessage(messageManager.getMessage("member", "guild_already_exists"));
+                    break;
 
-                Member inviter = guild.getMembers().get(player.getUniqueId());
-                if (inviter == null) return true;
+                case INVALID_NAME:
+                    player.sendMessage(messageManager.getMessage("member", "invalid_guild_name"));
+                    break;
+            }
 
-                if (!inviter.getRank().equalsIgnoreCase("Leader")
-                        && !inviter.getRank().equalsIgnoreCase("Officer")
-                        && !inviter.getRank().equalsIgnoreCase("Co-Leader")) {
-                    player.sendMessage("§cBạn không có quyền mời.");
-                    return true;
-                }
-
-                Player target = Bukkit.getPlayerExact(args[1]);
-                if (target == null) {
-                    player.sendMessage(messageManager.getMessage("member", "player_not_found"));
-                    return true;
-                }
-
-                if (guildManager.getPlayerGuild(target) != null) {
-                    player.sendMessage("§cNgười chơi này đã có guild.");
-                    return true;
-                }
-
-                guildManager.inviteMember(target.getUniqueId(), guild.getName());
-
-                player.sendMessage("§aĐã mời " + target.getName() + " vào guild.");
-                target.sendMessage("§eBạn được mời vào guild §a" + guild.getName()
-                        + "§e. Dùng §a/g accept §ehoặc §c/g reject");
-
-                return true;
-
-            case "donate":
-                if (guild == null) {
-                    player.sendMessage("§cBạn chưa tham gia guild nào.");
-                    return true;
-                }
-
-                if (guild.getBaseID() == null || BaseData.getBaseClaim(guild.getBaseID()) == null) {
-                    player.sendMessage("§cGuild của bạn chưa sở hữu base.");
-                    return true;
-                }
-
-                if (!guildManager.isPlayerInTheirOwnBase(player)) {
-                    player.sendMessage("§cBạn phải đứng trong base guild để donate.");
-                    return true;
-                }
-
-                GuildGUI.openDonateGUI(player, guild);
-                return true;
-
-            case "storage":
-                if (guild == null) {
-                    player.sendMessage(messageManager.getMessage("member", "not_in_guild"));
-                    return true;
-                }
-
-                GuildGUI.openStorageGUI(player, guild);
-                player.sendMessage(messageManager.getMessage("member", "storage_opened"));
-                return true;
-
-            case "accept":
-                guildManager.acceptInvite(player);
-                player.sendMessage(messageManager.getMessage("member", "accept_success"));
-                return true;
-
-            case "reject":
-                guildManager.rejectInvite(player.getUniqueId());
-                player.sendMessage(messageManager.getMessage("member", "reject_success"));
-                return true;
-
-            case "chat":
-                if (guild == null) {
-                    player.sendMessage("§cBạn không thuộc guild nào.");
-                    return true;
-                }
-
-                if (args.length == 1) {
-                    guildManager.toggleGuildChat(player);
-                    return true;
-                }
-
-                String message = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
-                guildManager.sendGuildMessage(plugin, guild, player, message);
-                return true;
+            return true;
         }
 
-        /* =========================
-           ADMIN COMMANDS
-           ========================= */
-        if (args[0].equalsIgnoreCase("admin")) {
+        /* =========================================================
+           INFO
+           /g info
+           ========================================================= */
 
-            if (!isAdmin) {
-                player.sendMessage(messageManager.getMessage("admin", "no_permission"));
+        if (sub.equals("info")) {
+
+            Guild guild = guildManager.getPlayerGuild(player);
+
+            if (guild == null) {
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "not_in_guild"
+                        )
+                );
+                return true;
+            }
+
+            GuildGUI.openGuildInfoGUI(
+                    player,
+                    guild,
+                    0
+            );
+
+            return true;
+        }
+
+        /* =========================================================
+           SKILL
+           /g skill
+           ========================================================= */
+
+        if (sub.equals("skill") || sub.equals("skills")) {
+
+            Guild guild = guildManager.getPlayerGuild(player);
+
+            if (guild == null) {
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "not_in_guild"
+                        )
+                );
+                return true;
+            }
+
+            GuildGUI.openGuildSkillTree(
+                    player,
+                    guild
+            );
+
+            return true;
+        }
+
+        /* =========================================================
+           AUCTION
+           /g auction
+           ========================================================= */
+
+        if (sub.equals("auction") || sub.equals("ah")) {
+
+            Guild guild = guildManager.getPlayerGuild(player);
+
+            if (guild == null) {
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "not_in_guild"
+                        )
+                );
+                return true;
+            }
+
+            GuildGUI.openAuctionGUI(
+                    player,
+                    guild,
+                    plugin.getAuctionManager()
+                            .getGuildAuctions(
+                                    guild.getName()
+                            )
+            );
+
+            return true;
+        }
+
+        /* =========================================================
+           INVITE
+           /g invite <player>
+           ========================================================= */
+
+        if (sub.equals("invite")) {
+
+            Guild guild = guildManager.getPlayerGuild(player);
+
+            if (guild == null) {
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "not_in_guild"
+                        )
+                );
                 return true;
             }
 
             if (args.length < 2) {
-                player.sendMessage("§c/guild admin <disband|add|kick|addexp|addlevel|reload>");
+                player.sendMessage(messageManager.getMessage("member", "invite_usage"));
                 return true;
             }
 
-            switch (args[1].toLowerCase()) {
+            Member inviter =
+                    guild.getMembers()
+                            .get(player.getUniqueId());
 
-                case "reload":
-                    try {
-                        guildManager.asyncLoadGuilds(() ->
-                                player.sendMessage("§aReload guilds thành công!")
-                        );
-                        messageManager.load(new File(plugin.getDataFolder(), "messages.yml"));
-                    } catch (IOException e) {
-                        player.sendMessage("§cReload thất bại.");
-                        e.printStackTrace();
-                    }
-                    return true;
+            if (inviter == null) {
+                player.sendMessage(messageManager.getMessage("member", "member_data_not_found"));
+                return true;
+            }
 
-                case "addexp":
-                    if (args.length < 4) return true;
-                    Guild gExp = guildManager.getGuild(args[2]);
-                    if (gExp == null) return true;
+            if (!hasManagementRank(inviter)) {
+                player.sendMessage(messageManager.getMessage("member", "no_invite_permission"));
+                return true;
+            }
 
-                    int exp = Integer.parseInt(args[3]);
-                    gExp.addExp(exp);
-                    player.sendMessage("§aĐã cộng " + exp + " exp cho guild.");
-                    return true;
+            Player target =
+                    Bukkit.getPlayerExact(args[1]);
 
-                case "addlevel":
-                    if (args.length < 4) return true;
-                    Guild gLvl = guildManager.getGuild(args[2]);
-                    if (gLvl == null) return true;
+            if (target == null) {
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "player_not_found"
+                        )
+                );
+                return true;
+            }
 
-                    int lvl = Integer.parseInt(args[3]);
-                    gLvl.addLevel(lvl);
-                    player.sendMessage("§aĐã cộng " + lvl + " level cho guild.");
-                    return true;
+            if (guildManager.getPlayerGuild(target) != null) {
+                player.sendMessage(messageManager.getMessage("member", "target_already_in_guild"));
+                return true;
+            }
 
-                case "test":
-                    GuildSkillTreeTest.open(player);
-                    return true;
+            guildManager.inviteMember(
+                    target.getUniqueId(),
+                    guild.getName()
+            );
 
-                case "test2":
+            player.sendMessage(messageManager.getMessage("member", "invite_success")
+                    .replace("{player}", target.getName()));
 
-                    Component title =
-                            Component.text("\uE004\uE003\uE000\uE002")
+            target.sendMessage(messageManager.getMessage("member", "invite_received")
+                    .replace("{guild}", guild.getName()));
 
-                                    .append(
-                                            Component.text("AdminVIP")
-                                                    .font(Key.key("minecraft", "guild_line1"))
-                                    )
+            target.sendMessage(messageManager.getMessage("member", "invite_accept_hint"));
 
-                                    .append(
-                                            Component.text("Lv. 5")
-                                                    .font(Key.key("minecraft", "guild_line2"))
-                                    )
+            return true;
+        }
 
-                                    .append(
-                                            Component.text("1.250 / 2.500 EXP")
-                                                    .font(Key.key("minecraft", "guild_line3"))
-                                    )
+        /* =========================================================
+           KICK
+           /g kick <player>
+           ========================================================= */
 
-                                    .append(
-                                            Component.text("----------------")
-                                                    .font(Key.key("minecraft", "guild_line4"))
-                                    )
+        if (sub.equals("kick")) {
 
-                                    .append(
-                                            Component.text("Chu Guild: Admin")
-                                                    .font(Key.key("minecraft", "guild_line5"))
-                                    )
+            Guild guild =
+                    guildManager.getPlayerGuild(player);
 
-                                    .append(
-                                            Component.text("Thanh vien: 12/50")
-                                                    .font(Key.key("minecraft", "guild_line6"))
-                                    )
+            if (guild == null) {
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "not_in_guild"
+                        )
+                );
+                return true;
+            }
 
-                                    .append(
-                                            Component.text("Cap Guild: 5")
-                                                    .font(Key.key("minecraft", "guild_line7"))
-                                    )
+            if (args.length < 2) {
+                player.sendMessage(messageManager.getMessage("member", "kick_usage"));
+                return true;
+            }
 
-                                    .append(
-                                            Component.text("Tien Guild: 1.250.000")
-                                                    .font(Key.key("minecraft", "guild_line8"))
-                                    );
+            Member kicker =
+                    guild.getMembers()
+                            .get(player.getUniqueId());
 
-                    Inventory inv = Bukkit.createInventory(
-                            null,
-                            54,
-                            title
+            if (kicker == null ||
+                    !hasManagementRank(kicker)) {
+
+                player.sendMessage(messageManager.getMessage("member", "no_kick_permission"));
+                return true;
+            }
+
+            Member target =
+                    findMember(
+                            guild,
+                            args[1]
                     );
 
-                    player.openInventory(inv);
+            if (target == null) {
+                player.sendMessage(messageManager.getMessage("member", "member_not_found")
+                        .replace("{player}", args[1]));
+                return true;
+            }
+
+            if (target.getUUID()
+                    .equals(guild.getLeader())) {
+
+                player.sendMessage(messageManager.getMessage("member", "cannot_kick_leader"));
+                return true;
+            }
+
+            if (target.getUUID()
+                    .equals(player.getUniqueId())) {
+
+                player.sendMessage(messageManager.getMessage("member", "cannot_kick_self"));
+                return true;
+            }
+
+            guildManager.kickMember(
+                    player,
+                    guild.getName(),
+                    target.getUUID()
+            );
+
+            guildManager.saveGuildSync(
+                    guild.getName()
+            );
+
+            return true;
+        }
+
+        /* =========================================================
+           LEAVE
+           /g leave
+           ========================================================= */
+
+        if (sub.equals("leave")) {
+            guildManager.leaveGuild(player);
+            return true;
+        }
+
+        /* =========================================================
+           DISBAND
+           /g disband
+           ========================================================= */
+
+        if (sub.equals("disband")) {
+            guildManager.disbandGuild(player);
+            return true;
+        }
+
+        /* =========================================================
+           DONATE
+           /g donate
+           ========================================================= */
+
+        if (sub.equals("donate")) {
+
+            Guild guild =
+                    guildManager.getPlayerGuild(player);
+
+            if (guild == null) {
+                player.sendMessage(messageManager.getMessage("member", "not_in_guild"));
+                return true;
+            }
+
+//            if (guild.getBaseID() == null ||
+//                    BaseData.getBaseClaim(
+//                            guild.getBaseID()
+//                    ) == null) {
+//
+//                player.sendMessage(messageManager.getMessage("member", "no_base"));
+//                return true;
+//            }
+
+//            if (!guildManager.isPlayerInTheirOwnBase(player)) {
+//
+//                player.sendMessage(messageManager.getMessage("member", "must_be_in_base"));
+//
+//                return true;
+//            }
+
+            GuildGUI.openDonateGUI(
+                    player,
+                    guild
+            );
+
+            return true;
+        }
+
+        /* =========================================================
+           STORAGE
+           /g storage
+           ========================================================= */
+
+        if (sub.equals("storage") ||
+                sub.equals("store")) {
+
+            Guild guild =
+                    guildManager.getPlayerGuild(player);
+
+            if (guild == null) {
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "not_in_guild"
+                        )
+                );
+                return true;
+            }
+
+            GuildGUI.openStorageGUI(
+                    player,
+                    guild
+            );
+
+            player.sendMessage(
+                    messageManager.getMessage(
+                            "member",
+                            "storage_opened"
+                    )
+            );
+
+            return true;
+        }
+
+        /* =========================================================
+           ACCEPT
+           /g accept
+           ========================================================= */
+
+        if (sub.equals("accept")) {
+
+            guildManager.acceptInvite(player);
+
+            player.sendMessage(
+                    messageManager.getMessage(
+                            "member",
+                            "accept_success"
+                    )
+            );
+
+            return true;
+        }
+
+        /* =========================================================
+           REJECT
+           /g reject
+           ========================================================= */
+
+        if (sub.equals("reject")) {
+
+            guildManager.rejectInvite(
+                    player.getUniqueId()
+            );
+
+            player.sendMessage(
+                    messageManager.getMessage(
+                            "member",
+                            "reject_success"
+                    )
+            );
+
+            return true;
+        }
+
+        /* =========================================================
+           CHAT
+           /g chat
+           /g chat <message>
+           ========================================================= */
+
+        if (sub.equals("chat")) {
+
+            Guild guild =
+                    guildManager.getPlayerGuild(player);
+
+            if (guild == null) {
+                player.sendMessage(messageManager.getMessage("member", "not_in_guild"));
+                return true;
+            }
+
+            if (args.length == 1) {
+
+                guildManager.toggleGuildChat(player);
+
+                return true;
+            }
+
+            String message =
+                    String.join(
+                            " ",
+                            Arrays.copyOfRange(
+                                    args,
+                                    1,
+                                    args.length
+                            )
+                    );
+
+            guildManager.sendGuildMessage(
+                    plugin,
+                    guild,
+                    player,
+                    message
+            );
+
+            return true;
+        }
+
+        /* =========================================================
+           BASE
+
+           /g base
+           /g base info
+           /g base requirements
+           /g base upgrade
+           ========================================================= */
+
+        if (sub.equals("base")) {
+
+            Guild guild =
+                    guildManager.getPlayerGuild(player);
+
+            if (guild == null) {
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "not_in_guild"
+                        )
+                );
+                return true;
+            }
+
+            if (guild.getBaseID() == null) {
+
+                player.sendMessage(messageManager.getMessage("member", "no_base"));
+
+                return true;
+            }
+
+            BaseData.BaseClaim base =
+                    BaseData.getBaseClaim(
+                            guild.getBaseID()
+                    );
+
+            if (base == null) {
+
+                player.sendMessage(messageManager.getMessage("member", "base_data_not_found"));
+
+                return true;
+            }
+
+            /* -------------------------
+               /g base
+               ------------------------- */
+
+            if (args.length == 1 ||
+                    args[1].equalsIgnoreCase("info")) {
+
+                player.sendMessage(messageManager.getMessage("member", "guild_base_header"));
+
+                player.sendMessage(messageManager.getMessage("member", "guild_base_name")
+                        .replace("{guild}", guild.getName()));
+
+                player.sendMessage(messageManager.getMessage("member", "guild_base_id")
+                        .replace("{base_id}", guild.getBaseID()));
+
+                player.sendMessage(messageManager.getMessage("member", "guild_base_level")
+                        .replace("{level}", String.valueOf(base.level)));
+
+                player.sendMessage(messageManager.getMessage("member", "guild_level")
+                        .replace("{level}", String.valueOf(guild.getLevel())));
+
+                player.sendMessage(messageManager.getMessage("member", "guild_members")
+                        .replace("{members}", String.valueOf(guild.getMembers().size()))
+                        .replace("{max_members}", String.valueOf(guild.getMaxMembers())));
+
+                return true;
+            }
+
+            /* -------------------------
+               /g base requirements
+               ------------------------- */
+
+            if (args[1].equalsIgnoreCase("requirements") ||
+                    args[1].equalsIgnoreCase("req")) {
+
+                int nextLevel =
+                        base.level + 1;
+
+                if (nextLevel >
+                        GuildManager.getMaxBaseLevel()) {
+
+                    player.sendMessage(messageManager.getMessage("member", "base_max_level"));
+
                     return true;
+                }
+
+                GuildManager.showUpgradeRequirements(
+                        player,
+                        nextLevel
+                );
+
+                return true;
+            }
+
+            /* -------------------------
+               /g base upgrade
+               ------------------------- */
+
+            if (args[1].equalsIgnoreCase("upgrade")) {
+
+                if (!guildManager.isGuildLeader(player) &&
+                        !guildManager.isCoLeader(player)) {
+
+                    player.sendMessage(messageManager.getMessage("member", "base_upgrade_permission"));
+
+                    return true;
+                }
+
+                int currentLevel =
+                        base.level;
+
+                int nextLevel =
+                        currentLevel + 1;
+
+                if (nextLevel >
+                        GuildManager.getMaxBaseLevel()) {
+
+                    player.sendMessage(messageManager.getMessage("member", "base_upgrade_max_level"));
+
+                    return true;
+                }
+
+                if (!GuildManager.canUpgradeBase(
+                        guild,
+                        currentLevel,
+                        nextLevel
+                )) {
+
+                    GuildManager.showUpgradeRequirements(
+                            player,
+                            nextLevel
+                    );
+
+                    player.sendMessage(messageManager.getMessage("member", "base_upgrade_not_ready"));
+
+                    return true;
+                }
+
+                player.sendMessage(messageManager.getMessage("member", "base_upgrade_start")
+                        .replace("{current}", String.valueOf(currentLevel))
+                        .replace("{next}", String.valueOf(nextLevel)));
+
+                guildManager.upgradeBaseAsync(
+                        player,
+                        guild,
+                        guild.getBaseID(),
+                        nextLevel
+                );
+
+                return true;
+            }
+
+            player.sendMessage(messageManager.getMessage("member", "base_usage"));
+
+            return true;
+        }
+
+        /* =========================================================
+           ADMIN
+           /g admin ...
+           ========================================================= */
+
+        if (sub.equals("admin")) {
+
+            if (!isAdmin) {
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "admin",
+                                "no_permission"
+                        )
+                );
+
+                return true;
+            }
+
+            return handleAdmin(
+                    player,
+                    args
+            );
+        }
+
+        /* =========================================================
+           UNKNOWN COMMAND
+           ========================================================= */
+
+        guildManager.showHelp(
+                player,
+                isAdmin
+        );
+
+        return true;
+    }
+
+    /* =============================================================
+       ADMIN COMMANDS
+       ============================================================= */
+
+    private boolean handleAdmin(
+            Player player,
+            String[] args
+    ) {
+
+        if (args.length < 2) {
+            sendAdminHelp(player);
+            return true;
+        }
+
+        String sub =
+                args[1].toLowerCase();
+
+        switch (sub) {
+
+            /* =====================================================
+               RELOAD
+               /g admin reload
+               ===================================================== */
+
+            case "reload":
+
+                try {
+
+                    guildManager.asyncLoadGuilds(
+                            () -> player.sendMessage(
+                                    messageManager.getMessage("admin", "reload_guild_success")
+                            )
+                    );
+
+                    messageManager.load(
+                            new File(
+                                    plugin.getDataFolder(),
+                                    "messages.yml"
+                            )
+                    );
+
+                    GuildSkillManager.reload(
+                            plugin
+                    );
+
+                    player.sendMessage(
+                            "§aReload messages thành công."
+                    );
+
+                    player.sendMessage(
+                            "§aReload skill tree thành công."
+                    );
+
+                } catch (IOException e) {
+
+                    player.sendMessage(
+                            "§cReload thất bại."
+                    );
+
+                    e.printStackTrace();
+                }
+
+                return true;
+
+            /* =====================================================
+               LIST
+               /g admin list
+               ===================================================== */
+
+            case "list":
+
+                if (guildManager.getAllGuilds().isEmpty()) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "no_guilds"));
+
+                    return true;
+                }
+
+                player.sendMessage(messageManager.getMessage("admin", "guild_list_header"));
+
+                for (Guild guild :
+                        guildManager.getAllGuilds()) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "guild_list_entry")
+                            .replace("{guild}", guild.getName())
+                            .replace("{level}", String.valueOf(guild.getLevel()))
+                            .replace("{members}", String.valueOf(guild.getMembers().size()))
+                            .replace("{max_members}", String.valueOf(guild.getMaxMembers())));
+                }
+
+                return true;
+
+            /* =====================================================
+               SAVE
+               /g admin save <guild>
+               ===================================================== */
+
+            case "save":
+
+                if (args.length < 3) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "save_usage"));
+
+                    return true;
+                }
+
+                Guild saveGuild =
+                        findGuild(args[2]);
+
+                if (saveGuild == null) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "guild_not_found")
+                            .replace("{guild}", args[2]));
+
+                    return true;
+                }
+
+                guildManager.saveGuildSync(
+                        saveGuild.getName()
+                );
+
+                player.sendMessage(messageManager.getMessage("admin", "guild_saved")
+                        .replace("{guild}", saveGuild.getName()));
+
+                return true;
+
+            /* =====================================================
+               ADD MEMBER
+               /g admin add <player> <guild>
+               ===================================================== */
+
+            case "add":
+
+                if (args.length < 4) {
+                    player.sendMessage(messageManager.getMessage("admin", "add_usage"));
+                    return true;
+                }
+
+                Player target = Bukkit.getPlayerExact(args[2]);
+
+                if (target == null) {
+                    player.sendMessage(messageManager.getMessage("admin", "player_must_be_online"));
+                    return true;
+                }
+
+                if (guildManager.getPlayerGuild(target) != null) {
+                    player.sendMessage(messageManager.getMessage("admin", "player_already_in_guild"));
+                    return true;
+                }
+
+                Guild targetGuild = findGuild(args[3]);
+
+                if (targetGuild == null) {
+                    player.sendMessage(messageManager.getMessage("admin", "guild_not_found")
+                            .replace("{guild}", args[3]));
+                    return true;
+                }
+
+                if (targetGuild.getMembers().size()
+                        >= targetGuild.getMaxMembers()) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "guild_full"));
+                    return true;
+                }
+
+                guildManager.addMember(
+                        targetGuild.getName(),
+                        target.getName(),
+                        target.getUniqueId(),
+                        "MEMBER",
+                        "Member",
+                        0
+                );
+
+                guildManager.saveGuildSync(
+                        targetGuild.getName()
+                );
+
+                player.sendMessage(messageManager.getMessage("admin", "member_added")
+                        .replace("{player}", target.getName())
+                        .replace("{guild}", targetGuild.getName()));
+
+                target.sendMessage(messageManager.getMessage("admin", "member_added_target")
+                        .replace("{guild}", targetGuild.getName()));
+
+                return true;
+
+            /* =====================================================
+               ADMIN KICK
+               /g admin kick <guild> <player>
+               ===================================================== */
+
+            case "kick":
+
+                if (args.length < 4) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "admin_kick_usage"));
+
+                    return true;
+                }
+
+                Guild kickGuild =
+                        findGuild(args[2]);
+
+                if (kickGuild == null) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "guild_not_found")
+                            .replace("{guild}", args[2]));
+
+                    return true;
+                }
+
+                Member kickTarget =
+                        findMember(
+                                kickGuild,
+                                args[3]
+                        );
+
+                if (kickTarget == null) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "admin_member_not_found")
+                            .replace("{player}", args[3]));
+
+                    return true;
+                }
+
+                if (kickTarget.getUUID()
+                        .equals(kickGuild.getLeader())) {
+
+                    player.sendMessage(messageManager.getMessage("member", "cannot_kick_leader"));
+
+                    return true;
+                }
+
+                if (!guildManager.kickMemberAsAdmin(
+                        kickGuild.getName(),
+                        kickTarget.getUUID()
+                )) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "admin_kick_failed"));
+
+                    return true;
+                }
+
+                guildManager.saveGuildSync(
+                        kickGuild.getName()
+                );
+
+                player.sendMessage(messageManager.getMessage("admin", "admin_kick_success")
+                        .replace("{player}", kickTarget.getName())
+                        .replace("{guild}", kickGuild.getName()));
+
+                Player onlineTarget =
+                        Bukkit.getPlayer(
+                                kickTarget.getUUID()
+                        );
+
+                if (onlineTarget != null) {
+
+                    onlineTarget.sendMessage(messageManager.getMessage("admin", "admin_kick_target")
+                            .replace("{guild}", kickGuild.getName()));
+                }
+
+                return true;
+
+            /* =====================================================
+               ADMIN DISBAND
+               /g admin disband <guild>
+               ===================================================== */
+
+            case "disband":
+
+                if (args.length < 3) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "disband_usage"));
+
+                    return true;
+                }
+
+                Guild disbandGuild =
+                        findGuild(args[2]);
+
+                if (disbandGuild == null) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "guild_not_found")
+                            .replace("{guild}", args[2]));
+
+                    return true;
+                }
+
+                guildManager.removeGuild(
+                        disbandGuild.getName()
+                );
+
+                player.sendMessage(messageManager.getMessage("admin", "disband_success")
+                        .replace("{guild}", disbandGuild.getName()));
+
+                return true;
+
+            /* =====================================================
+               ADD EXP
+               /g admin addexp <guild> <amount>
+               ===================================================== */
+
+            case "addexp":
+
+                if (args.length < 4) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "addexp_usage"));
+
+                    return true;
+                }
+
+                Guild expGuild =
+                        findGuild(args[2]);
+
+                if (expGuild == null) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "guild_not_found")
+                            .replace("{guild}", args[2]));
+
+                    return true;
+                }
+
+                Integer exp =
+                        parseInt(
+                                player,
+                                args[3],
+                                "EXP"
+                        );
+
+                if (exp == null ||
+                        exp <= 0) {
+
+                    return true;
+                }
+
+                expGuild.addExp(exp);
+
+                guildManager.saveGuildSync(
+                        expGuild.getName()
+                );
+
+                player.sendMessage(messageManager.getMessage("admin", "addexp_success")
+                        .replace("{amount}", String.valueOf(exp))
+                        .replace("{guild}", expGuild.getName()));
+
+                return true;
+
+            /* =====================================================
+               ADD LEVEL
+               /g admin addlevel <guild> <amount>
+               ===================================================== */
+
+            case "addlevel":
+
+                if (args.length < 4) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "addlevel_usage"));
+
+                    return true;
+                }
+
+                Guild levelGuild =
+                        findGuild(args[2]);
+
+                if (levelGuild == null) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "guild_not_found")
+                            .replace("{guild}", args[2]));
+
+                    return true;
+                }
+
+                Integer level =
+                        parseInt(
+                                player,
+                                args[3],
+                                "Level"
+                        );
+
+                if (level == null ||
+                        level <= 0) {
+
+                    return true;
+                }
+
+                levelGuild.addLevel(level);
+
+                guildManager.saveGuildSync(
+                        levelGuild.getName()
+                );
+
+                player.sendMessage(messageManager.getMessage("admin", "addlevel_success")
+                        .replace("{amount}", String.valueOf(level))
+                        .replace("{guild}", levelGuild.getName()));
+
+                return true;
+
+            /* =====================================================
+               ADD POINTS
+               /g admin addpoints <guild> <player> <amount>
+               ===================================================== */
+
+            case "addpoints":
+
+                if (args.length < 5) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "addpoints_usage"));
+
+                    return true;
+                }
+
+                Guild pointsGuild =
+                        findGuild(args[2]);
+
+                if (pointsGuild == null) {
+
+                    player.sendMessage(messageManager.getMessage("admin", "guild_not_found")
+                            .replace("{guild}", args[2]));
+
+                    return true;
+                }
+
+                Member pointsTarget =
+                        findMember(
+                                pointsGuild,
+                                args[3]
+                        );
+
+                if (pointsTarget == null) {
+
+                    player.sendMessage(messageManager.getMessage("member", "member_not_found")
+                            .replace("{player}", args[3]));
+
+                    return true;
+                }
+
+                Integer points =
+                        parseInt(
+                                player,
+                                args[4],
+                                "Điểm"
+                        );
+
+                if (points == null) {
+                    return true;
+                }
+
+                guildManager.updateMemberPoints(
+                        pointsGuild.getName(),
+                        pointsTarget.getUUID(),
+                        points
+                );
+
+                guildManager.saveGuildSync(
+                        pointsGuild.getName()
+                );
+
+                player.sendMessage(messageManager.getMessage(
+                                "admin",
+                                points >= 0 ? "addpoints_success_add" : "addpoints_success_remove"
+                        )
+                        .replace("{amount}", String.valueOf(Math.abs(points)))
+                        .replace("{player}", pointsTarget.getName()));
+
+                return true;
+
+            default:
+
+                sendAdminHelp(player);
+
+                return true;
+        }
+    }
+
+    /* =============================================================
+       HELP
+       ============================================================= */
+
+    private void sendAdminHelp(Player player) {
+
+        player.sendMessage(messageManager.getMessage("admin", "help_header"));
+
+        player.sendMessage(messageManager.getMessage("admin", "help_title"));
+
+        player.sendMessage(messageManager.getMessage("admin", "help_list"));
+
+        player.sendMessage(messageManager.getMessage("admin", "help_save"));
+
+        player.sendMessage(messageManager.getMessage("admin", "help_add"));
+
+        player.sendMessage(messageManager.getMessage("admin", "help_kick"));
+
+        player.sendMessage(messageManager.getMessage("admin", "help_disband"));
+
+        player.sendMessage(messageManager.getMessage("admin", "help_addexp"));
+
+        player.sendMessage(messageManager.getMessage("admin", "help_addlevel"));
+
+        player.sendMessage(messageManager.getMessage("admin", "help_addpoints"));
+
+        player.sendMessage(messageManager.getMessage("admin", "help_reload"));
+
+        player.sendMessage(messageManager.getMessage("admin", "help_header"));
+    }
+
+    /* =============================================================
+       HELPERS
+       ============================================================= */
+
+    private boolean hasManagementRank(Member member) {
+
+        String rank =
+                member.getRank();
+
+        return rank.equalsIgnoreCase("Leader")
+                || rank.equalsIgnoreCase("Co-Leader")
+                || rank.equalsIgnoreCase("Officer");
+    }
+
+    private Member findMember(
+            Guild guild,
+            String name
+    ) {
+
+        for (Map.Entry<UUID, Member> entry :
+                guild.getMembers().entrySet()) {
+
+            Member member =
+                    entry.getValue();
+
+            if (member.getName()
+                    .equalsIgnoreCase(name)) {
+
+                return member;
             }
         }
 
-        player.sendMessage(messageManager.getMessage("member", "usage"));
-        return true;
+        return null;
+    }
+
+    private Guild findGuild(String name) {
+
+        for (Guild guild :
+                guildManager.getAllGuilds()) {
+
+            if (guild.getName()
+                    .equalsIgnoreCase(name)) {
+
+                return guild;
+            }
+        }
+
+        return null;
+    }
+
+    private Integer parseInt(
+            Player player,
+            String value,
+            String type
+    ) {
+
+        try {
+
+            return Integer.parseInt(value);
+
+        } catch (NumberFormatException e) {
+
+            player.sendMessage(messageManager.getMessage("system", "invalid_number")
+                    .replace("{type}", type));
+
+            return null;
+        }
     }
 }

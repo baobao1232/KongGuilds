@@ -72,7 +72,7 @@ public class GuildListener implements Listener {
         }
 
         if (slot == 16) {
-            GuildGUI.openGuildSkillGUI(player, guild);
+            GuiSkillTree.open(player, guild);
             return;
         }
 
@@ -151,7 +151,7 @@ public class GuildListener implements Listener {
         ItemStack current = event.getCurrentItem();
 
         if (!top) {
-            if (current == null || current.getType().isAir()) return;
+            if (current == null || current.getType() == Material.AIR) return;
 
             double value = ItemValueCalculator.calculateItemValue(current);
             if (value <= 0 || Double.isNaN(value)) {
@@ -198,7 +198,7 @@ public class GuildListener implements Listener {
         for (int i = 0; i < inv.getSize(); i++) {
             if (isDonateSlot(i)) {
                 ItemStack it = inv.getItem(i);
-                if (it == null || it.getType().isAir()) return i;
+                if (it == null || it.getType() == Material.AIR) return i;
             }
         }
         return -1;
@@ -224,7 +224,7 @@ public class GuildListener implements Listener {
             if (!isDonateSlot(i)) continue;
 
             ItemStack item = donate.getItem(i);
-            if (item == null || item.getType().isAir()) continue;
+            if (item == null || item.getType() == Material.AIR) continue;
 
             double value = ItemValueCalculator.calculateItemValue(item) * 10;
             if (value <= 0) continue;
@@ -284,7 +284,7 @@ public class GuildListener implements Listener {
         if (!isDonateSlot(rawSlot)) return;
 
         ItemStack clicked = e.getCurrentItem();
-        if (clicked == null || clicked.getType().isAir()) return;
+        if (clicked == null || clicked.getType() == Material.AIR) return;
 
         // 🔥 MỞ GUI XIN ITEM
         GuildGUI.openRequestItemGUI(player, guild, clicked);
@@ -473,7 +473,7 @@ public class GuildListener implements Listener {
                 e.getCurrentItem();
 
         if (clicked == null
-                || clicked.getType().isAir()) {
+                || clicked.getType() == Material.AIR) {
 
             return;
         }
@@ -543,7 +543,7 @@ public class GuildListener implements Listener {
                 );
 
         if (storedItem == null
-                || storedItem.getType().isAir()) {
+                || storedItem.getType() == Material.AIR) {
 
             leader.sendMessage(
                     "§cKhông tìm thấy vật phẩm trong kho Guild."
@@ -651,7 +651,7 @@ public class GuildListener implements Listener {
                     leftovers.values()) {
 
                 if (leftover == null
-                        || leftover.getType().isAir()) {
+                        || leftover.getType() == Material.AIR) {
                     continue;
                 }
 
@@ -716,7 +716,7 @@ public class GuildListener implements Listener {
         }
 
         ItemStack clicked = event.getCurrentItem();
-        if (clicked == null || clicked.getType().isAir() || !clicked.hasItemMeta()) return;
+        if (clicked == null || clicked.getType() == Material.AIR || !clicked.hasItemMeta()) return;
 
         String skillId = clicked.getItemMeta()
                 .getPersistentDataContainer()
@@ -1325,9 +1325,11 @@ public class GuildListener implements Listener {
             return;
         }
 
-        if (!event.getView()
-                .getTitle()
-                .equals("§d§lGuild Skill Tree")) {
+        if (!(event.getView().getTopInventory().getHolder() instanceof GUIHolder holder)) {
+            return;
+        }
+
+        if (holder.getType() != GUIType.GUILD_SKILLS) {
             return;
         }
 
@@ -1335,26 +1337,62 @@ public class GuildListener implements Listener {
 
         int slot = event.getRawSlot();
 
+        // Chỉ xử lý click trong GUI
+        if (slot < 0 || slot >= event.getView().getTopInventory().getSize()) {
+            return;
+        }
+
+        Guild guild = guildManager.getPlayerGuild(player);
+
+        if (guild == null) {
+            player.closeInventory();
+            player.sendMessage("§cBạn không thuộc Guild.");
+            return;
+        }
+
         switch (slot) {
 
             case 47: // ←
-                GuildSkillTreeTest.move(player, -1, 0);
+                GuiSkillTree.move(
+                        player,
+                        guild,
+                        -1,
+                        0
+                );
                 break;
 
             case 48: // ↑
-                GuildSkillTreeTest.move(player, 0, -1);
+                GuiSkillTree.move(
+                        player,
+                        guild,
+                        0,
+                        -1
+                );
                 break;
 
             case 49: // CAMERA - reset
-                GuildSkillTreeTest.resetCamera(player);
+                GuiSkillTree.resetCamera(
+                        player,
+                        guild
+                );
                 break;
 
             case 50: // ↓
-                GuildSkillTreeTest.move(player, 0, 1);
+                GuiSkillTree.move(
+                        player,
+                        guild,
+                        0,
+                        1
+                );
                 break;
 
             case 51: // →
-                GuildSkillTreeTest.move(player, 1, 0);
+                GuiSkillTree.move(
+                        player,
+                        guild,
+                        1,
+                        0
+                );
                 break;
         }
     }

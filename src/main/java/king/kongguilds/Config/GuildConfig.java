@@ -1,6 +1,10 @@
 package king.kongguilds.Config;
 
+import king.kongguilds.Main;
+import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
@@ -185,6 +189,5 @@ public class GuildConfig {
         return isWorldBoss(internalName)
                 || isGuildBoss(internalName);
     }
-
 
 }

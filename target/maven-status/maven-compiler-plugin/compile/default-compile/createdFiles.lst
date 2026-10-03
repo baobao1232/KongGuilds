@@ -14,6 +14,7 @@ king\kongguilds\Model\BidHistory.class
 king\kongguilds\Gui\AuctionHistoryGUI.class
 king\kongguilds\Manager\BossLootManager.class
 king\kongguilds\Config\GuildConfig.class
+king\kongguilds\Gui\GuiSkillTree$Point.class
 king\kongguilds\Manager\GuildManager$5$1.class
 king\kongguilds\Manager\AuctionManager.class
 king\kongguilds\Manager\GuildManager$2.class
@@ -21,6 +22,7 @@ king\kongguilds\Manager\GuildManager$5.class
 king\kongguilds\Manager\ItemValueCalculator.class
 king\kongguilds\Base\BaseData$BaseClaim.class
 king\kongguilds\Manager\AuctionManager$1.class
+king\kongguilds\Gui\GuiSkillTree.class
 king\kongguilds\Cache\GuildDataCache.class
 king\kongguilds\Base\BaseHologramManager.class
 king\kongguilds\Model\Guild.class
@@ -39,16 +41,15 @@ king\kongguilds\Manager\GuildManager$UpgradeRequirement.class
 king\kongguilds\Model\Rank.class
 king\kongguilds\Model\Guild$RankType.class
 king\kongguilds\WorldGuard\BaseRegionManager.class
-king\kongguilds\Manager\GuildSkillTreeTest.class
 king\kongguilds\Model\AuctionItem.class
 king\kongguilds\Model\TimedInvite.class
 king\kongguilds\Base\BaseData.class
+king\kongguilds\Gui\GuiSkillTree$LineType.class
 king\kongguilds\Manager\GuildManager$4$1.class
 king\kongguilds\Manager\GuildSkillManager.class
 king\kongguilds\Manager\GuildManager.class
 king\kongguilds\Manager\ItemStackSerializer.class
 king\kongguilds\Manager\GuildManager$CreateResult.class
 king\kongguilds\Gui\GUIHolder.class
-king\kongguilds\Manager\GuildSkillTreeTest$Point.class
 king\kongguilds\Base\BaseData$LocationAdapter.class
 king\kongguilds\Manager\GuildManager$3.class

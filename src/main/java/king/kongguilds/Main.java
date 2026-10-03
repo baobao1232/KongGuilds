@@ -8,10 +8,7 @@ import king.kongguilds.License.LicenseManager;
 import king.kongguilds.Listener.BossLootListener;
 import king.kongguilds.Listener.GuildListener;
 import king.kongguilds.Listener.MythicMobDropListener;
-import king.kongguilds.Manager.AuctionManager;
-import king.kongguilds.Manager.BossLootManager;
-import king.kongguilds.Manager.GuildManager;
-import king.kongguilds.Manager.MessageManager;
+import king.kongguilds.Manager.*;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.TaskManager.TaskManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -43,6 +40,8 @@ public class Main extends JavaPlugin {
 
         createPluginFolder();
         loadPluginConfig();
+        GuildSkillManager.load(this);
+
 
         if (!loadMessages()) {
             return;
@@ -84,6 +83,7 @@ public class Main extends JavaPlugin {
         BaseData.setBaseFile(this.getDataFolder());
         getDataFolder().mkdirs();
         saveDefaultConfig();
+        saveResource("messages.yml", false);
     }
 
     private void loadPluginConfig() {
