@@ -143,7 +143,7 @@ public class GuildListener implements Listener {
         int rawSlot = event.getRawSlot();
 
         if (rawSlot == 16) {
-            GuildGUI.openGuildSkillGUI(player, guild);
+            GuiSkillTree.open(player, guild);
             return;
         }
         boolean top = rawSlot < event.getInventory().getSize();
@@ -264,7 +264,7 @@ public class GuildListener implements Listener {
             return;
         }
         if (rawSlot == 16) {
-            GuildGUI.openGuildSkillGUI(player, guild);
+            GuiSkillTree.open(player, guild);
             return;
         }
         if (rawSlot == 25) {
@@ -398,7 +398,7 @@ public class GuildListener implements Listener {
         }
 
         if (slot == 16) {
-            GuildGUI.openGuildSkillGUI(leader, guild);
+            GuiSkillTree.open(leader, guild);
             return;
         }
 
@@ -710,7 +710,40 @@ public class GuildListener implements Listener {
 
         int slot = event.getRawSlot();
 
+        // ===============================
+        // CAMERA CONTROL
+        // ===============================
+
+        if (slot == 47) {
+            GuiSkillTree.move(player, guild, -1, 0);
+            return;
+        }
+
+        if (slot == 48) {
+            GuiSkillTree.move(player, guild, 0, -1);
+            return;
+        }
+
         if (slot == 49) {
+            GuiSkillTree.resetCamera(player, guild);
+            return;
+        }
+
+        if (slot == 50) {
+            GuiSkillTree.move(player, guild, 0, 1);
+            return;
+        }
+
+        if (slot == 51) {
+            GuiSkillTree.move(player, guild, 1, 0);
+            return;
+        }
+
+        // ===============================
+        // BACK
+        // ===============================
+
+        if (slot == 53) {
             GuildGUI.openGuildInfoGUI(player, guild, 0);
             return;
         }
@@ -770,7 +803,7 @@ public class GuildListener implements Listener {
         player.sendMessage("§aĐã nâng cấp " + skill.getName()
                 + " §alên cấp " + guild.getSkillLevel(skillId) + ".");
 
-        GuildGUI.openGuildSkillGUI(player, guild);
+        GuiSkillTree.open(player, guild);
     }
 
     @EventHandler
@@ -1316,85 +1349,6 @@ public class GuildListener implements Listener {
                 "%,.0f",
                 money
         );
-    }
-
-    @EventHandler
-    public void testSkillTreeClick(InventoryClickEvent event) {
-
-        if (!(event.getWhoClicked() instanceof Player player)) {
-            return;
-        }
-
-        if (!(event.getView().getTopInventory().getHolder() instanceof GUIHolder holder)) {
-            return;
-        }
-
-        if (holder.getType() != GUIType.GUILD_SKILLS) {
-            return;
-        }
-
-        event.setCancelled(true);
-
-        int slot = event.getRawSlot();
-
-        // Chỉ xử lý click trong GUI
-        if (slot < 0 || slot >= event.getView().getTopInventory().getSize()) {
-            return;
-        }
-
-        Guild guild = guildManager.getPlayerGuild(player);
-
-        if (guild == null) {
-            player.closeInventory();
-            player.sendMessage("§cBạn không thuộc Guild.");
-            return;
-        }
-
-        switch (slot) {
-
-            case 47: // ←
-                GuiSkillTree.move(
-                        player,
-                        guild,
-                        -1,
-                        0
-                );
-                break;
-
-            case 48: // ↑
-                GuiSkillTree.move(
-                        player,
-                        guild,
-                        0,
-                        -1
-                );
-                break;
-
-            case 49: // CAMERA - reset
-                GuiSkillTree.resetCamera(
-                        player,
-                        guild
-                );
-                break;
-
-            case 50: // ↓
-                GuiSkillTree.move(
-                        player,
-                        guild,
-                        0,
-                        1
-                );
-                break;
-
-            case 51: // →
-                GuiSkillTree.move(
-                        player,
-                        guild,
-                        1,
-                        0
-                );
-                break;
-        }
     }
 
 }

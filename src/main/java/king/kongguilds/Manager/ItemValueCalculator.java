@@ -5,6 +5,7 @@ import net.Indyuce.mmoitems.MMOItems;
 import net.Indyuce.mmoitems.api.Type;
 import net.Indyuce.mmoitems.api.item.mmoitem.LiveMMOItem;
 import net.Indyuce.mmoitems.stat.type.ItemStat;
+import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
 import java.math.BigDecimal;
@@ -60,7 +61,7 @@ public class ItemValueCalculator {
      */
     public static double calculateItemValue(ItemStack itemStack) {
 
-        if (itemStack == null || itemStack.getType().isAir()) {
+        if (itemStack == null || itemStack.getType() == Material.AIR) {
             return 0.0;
         }
 
@@ -151,7 +152,7 @@ public class ItemValueCalculator {
 
         Map<String, Double> result = new HashMap<>();
 
-        if (itemStack == null || itemStack.getType().isAir()) {
+        if (itemStack == null || itemStack.getType() == Material.AIR) {
             return result;
         }
 
@@ -207,7 +208,7 @@ public class ItemValueCalculator {
      */
     public static void debugItem(ItemStack itemStack) {
 
-        if (itemStack == null || itemStack.getType().isAir()) {
+        if (itemStack == null || itemStack.getType() == Material.AIR) {
             System.out.println("[ItemValue] Item null/air.");
             return;
         }

@@ -58,7 +58,7 @@ public class GuildCommands implements CommandExecutor {
         boolean isAdmin = player.hasPermission("guild.admin");
 
         if (args.length == 0) {
-            guildManager.showHelp(player, isAdmin);
+            sendHelp(player, isAdmin);
             return true;
         }
 
@@ -281,7 +281,12 @@ public class GuildCommands implements CommandExecutor {
             }
 
             if (args.length < 2) {
-                player.sendMessage(messageManager.getMessage("member", "kick_usage"));
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "kick_usage"
+                        )
+                );
                 return true;
             }
 
@@ -292,7 +297,12 @@ public class GuildCommands implements CommandExecutor {
             if (kicker == null ||
                     !hasManagementRank(kicker)) {
 
-                player.sendMessage(messageManager.getMessage("member", "no_kick_permission"));
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "no_kick_permission"
+                        )
+                );
                 return true;
             }
 
@@ -303,22 +313,39 @@ public class GuildCommands implements CommandExecutor {
                     );
 
             if (target == null) {
-                player.sendMessage(messageManager.getMessage("member", "member_not_found")
-                        .replace("{player}", args[1]));
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "member_not_found"
+                        ).replace(
+                                "{player}",
+                                args[1]
+                        )
+                );
                 return true;
             }
 
             if (target.getUUID()
                     .equals(guild.getLeader())) {
 
-                player.sendMessage(messageManager.getMessage("member", "cannot_kick_leader"));
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "cannot_kick_leader"
+                        )
+                );
                 return true;
             }
 
             if (target.getUUID()
                     .equals(player.getUniqueId())) {
 
-                player.sendMessage(messageManager.getMessage("member", "cannot_kick_self"));
+                player.sendMessage(
+                        messageManager.getMessage(
+                                "member",
+                                "cannot_kick_self"
+                        )
+                );
                 return true;
             }
 
@@ -701,10 +728,7 @@ public class GuildCommands implements CommandExecutor {
            UNKNOWN COMMAND
            ========================================================= */
 
-        guildManager.showHelp(
-                player,
-                isAdmin
-        );
+        sendHelp(player, isAdmin);
 
         return true;
     }
@@ -713,25 +737,21 @@ public class GuildCommands implements CommandExecutor {
        ADMIN COMMANDS
        ============================================================= */
 
-    private boolean handleAdmin(
-            Player player,
-            String[] args
-    ) {
+    private boolean handleAdmin(Player player, String[] args) {
 
         if (args.length < 2) {
             sendAdminHelp(player);
             return true;
         }
 
-        String sub =
-                args[1].toLowerCase();
+        String sub = args[1].toLowerCase();
 
         switch (sub) {
 
             /* =====================================================
-               RELOAD
-               /g admin reload
-               ===================================================== */
+            RELOAD
+            /g admin reload
+            ===================================================== */
 
             case "reload":
 
@@ -1177,6 +1197,131 @@ public class GuildCommands implements CommandExecutor {
 
                 return true;
 
+               /* =====================================================
+               ADD CONTRIBUTION
+               /g admin addcontribution <guild> <amount>
+               ===================================================== */
+
+            case "addcontribution":
+
+                if (args.length < 4) {
+
+                    player.sendMessage(
+                            "§c/g admin addcontribution <guild> <amount>"
+                    );
+
+                    return true;
+                }
+
+                Guild contributionGuild =
+                        findGuild(args[2]);
+
+                if (contributionGuild == null) {
+
+                    player.sendMessage(
+                            messageManager.getMessage("admin", "guild_not_found")
+                                    .replace("{guild}", args[2])
+                    );
+
+                    return true;
+                }
+
+                Long contribution =
+                        parseLong(
+                                player,
+                                args[3],
+                                "Điểm cống hiến"
+                        );
+
+                if (contribution == null ||
+                        contribution <= 0) {
+
+                    return true;
+                }
+
+                contributionGuild.addContribution(contribution);
+
+                guildManager.saveGuildSync(
+                        contributionGuild.getName()
+                );
+
+                player.sendMessage(
+                        "§aĐã thêm §e"
+                                + contribution
+                                + " §ađiểm cống hiến cho Guild §f"
+                                + contributionGuild.getName()
+                                + "§a."
+                );
+
+                return true;
+
+                /* =====================================================
+               REMOVE CONTRIBUTION
+               /g admin removecontribution <guild> <amount>
+               ===================================================== */
+
+            case "removecontribution":
+
+                if (args.length < 4) {
+
+                    player.sendMessage(
+                            "§c/g admin removecontribution <guild> <amount>"
+                    );
+
+                    return true;
+                }
+
+                Guild removeContributionGuild =
+                        findGuild(args[2]);
+
+                if (removeContributionGuild == null) {
+
+                    player.sendMessage(
+                            messageManager.getMessage("admin", "guild_not_found")
+                                    .replace("{guild}", args[2])
+                    );
+
+                    return true;
+                }
+
+                Long removeAmount =
+                        parseLong(
+                                player,
+                                args[3],
+                                "Điểm cống hiến"
+                        );
+
+                if (removeAmount == null ||
+                        removeAmount <= 0) {
+
+                    return true;
+                }
+
+                if (!removeContributionGuild.removeContribution(removeAmount)) {
+
+                    player.sendMessage(
+                            "§cGuild chỉ còn §e"
+                                    + removeContributionGuild.getAvailableContribution()
+                                    + " §cđiểm cống hiến có thể sử dụng."
+                    );
+
+                    return true;
+                }
+
+                guildManager.saveGuildSync(
+                        removeContributionGuild.getName()
+                );
+
+                player.sendMessage(
+                        "§aĐã trừ §e"
+                                + removeAmount
+                                + " §ađiểm cống hiến của Guild §f"
+                                + removeContributionGuild.getName()
+                                + "§a."
+                );
+
+                return true;
+
             default:
 
                 sendAdminHelp(player);
@@ -1186,34 +1331,36 @@ public class GuildCommands implements CommandExecutor {
     }
 
     /* =============================================================
-       HELP
-       ============================================================= */
+    HELP
+    ============================================================= */
+
+    private void sendHelp(Player player, boolean isAdmin) {
+
+        for (String line :
+                messageManager.getMessageList("help", "member")) {
+
+            player.sendMessage(line);
+        }
+
+        if (isAdmin) {
+
+            player.sendMessage("");
+
+            for (String line :
+                    messageManager.getMessageList("help", "admin")) {
+
+                player.sendMessage(line);
+            }
+        }
+    }
 
     private void sendAdminHelp(Player player) {
 
-        player.sendMessage(messageManager.getMessage("admin", "help_header"));
+        for (String line :
+                messageManager.getMessageList("help", "admin")) {
 
-        player.sendMessage(messageManager.getMessage("admin", "help_title"));
-
-        player.sendMessage(messageManager.getMessage("admin", "help_list"));
-
-        player.sendMessage(messageManager.getMessage("admin", "help_save"));
-
-        player.sendMessage(messageManager.getMessage("admin", "help_add"));
-
-        player.sendMessage(messageManager.getMessage("admin", "help_kick"));
-
-        player.sendMessage(messageManager.getMessage("admin", "help_disband"));
-
-        player.sendMessage(messageManager.getMessage("admin", "help_addexp"));
-
-        player.sendMessage(messageManager.getMessage("admin", "help_addlevel"));
-
-        player.sendMessage(messageManager.getMessage("admin", "help_addpoints"));
-
-        player.sendMessage(messageManager.getMessage("admin", "help_reload"));
-
-        player.sendMessage(messageManager.getMessage("admin", "help_header"));
+            player.sendMessage(line);
+        }
     }
 
     /* =============================================================
@@ -1284,4 +1431,29 @@ public class GuildCommands implements CommandExecutor {
             return null;
         }
     }
+
+    private Long parseLong(
+            Player player,
+            String value,
+            String type
+    ) {
+
+        try {
+
+            return Long.parseLong(value);
+
+        } catch (NumberFormatException e) {
+
+            player.sendMessage(
+                    messageManager.getMessage(
+                            "system",
+                            "invalid_number"
+                    ).replace("{type}", type)
+            );
+
+            return null;
+        }
+    }
+
+
 }

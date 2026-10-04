@@ -76,58 +76,58 @@ public class GuildGUI {
         player.openInventory(donate);
     }
 
-    /* =========================
-       GUILD SKILL TREE
-       ========================= */
-    public static void openGuildSkillGUI(Player player, Guild guild) {
-        if (guild == null) {
-            player.sendMessage("§cBạn không thuộc Guild.");
-            return;
-        }
-
-        Inventory gui = Bukkit.createInventory(
-                new GUIHolder(GUIType.GUILD_SKILLS, 0),
-                54,
-                "§5§lGuild Skill Tree"
-        );
-
-        gui.setItem(4, createItem(
-                Material.NETHER_STAR,
-                "§d§lĐIỂM CỐNG HIẾN",
-                "§7Tổng đã đóng góp: §f" + guild.getTotalContribution(),
-                "§7Đang có thể dùng: §a" + guild.getAvailableContribution(),
-                "§7Đã dùng cho Skill: §e" + guild.getSpentContribution()
-        ));
-
-        gui.setItem(49, createItem(
-                Material.BARRIER,
-                "§cQuay về Guild"
-        ));
-
-        String[] branches = {"WAR", "FORTRESS", "ARCANE", "DEVELOPMENT"};
-        Material[] branchMaterials = {
-                Material.IRON_SWORD, Material.SHIELD, Material.ENCHANTING_TABLE, Material.OAK_SAPLING
-        };
-        int[] columns = {1, 3, 5, 7};
-
-        for (int i = 0; i < branches.length; i++) {
-            gui.setItem(columns[i], createItem(
-                    branchMaterials[i],
-                    branchName(branches[i]),
-                    "§7Cấp Guild hiện tại: §a" + guild.getLevel()
-            ));
-
-            List<GuildSkillManager.Skill> skills =
-                    GuildSkillManager.getBranch(branches[i]);
-
-            for (int j = 0; j < skills.size(); j++) {
-                int slot = (j + 1) * 9 + columns[i];
-                gui.setItem(slot, createSkillItem(guild, skills.get(j)));
-            }
-        }
-
-        player.openInventory(gui);
-    }
+//    /* =========================
+//       GUILD SKILL TREE
+//       ========================= */
+//    public static void openGuildSkillGUI(Player player, Guild guild) {
+//        if (guild == null) {
+//            player.sendMessage("§cBạn không thuộc Guild.");
+//            return;
+//        }
+//
+//        Inventory gui = Bukkit.createInventory(
+//                new GUIHolder(GUIType.GUILD_SKILLS, 0),
+//                54,
+//                "§5§lGuild Skill Tree"
+//        );
+//
+//        gui.setItem(4, createItem(
+//                Material.NETHER_STAR,
+//                "§d§lĐIỂM CỐNG HIẾN",
+//                "§7Tổng đã đóng góp: §f" + guild.getTotalContribution(),
+//                "§7Đang có thể dùng: §a" + guild.getAvailableContribution(),
+//                "§7Đã dùng cho Skill: §e" + guild.getSpentContribution()
+//        ));
+//
+//        gui.setItem(49, createItem(
+//                Material.BARRIER,
+//                "§cQuay về Guild"
+//        ));
+//
+//        String[] branches = {"WAR", "FORTRESS", "ARCANE", "DEVELOPMENT"};
+//        Material[] branchMaterials = {
+//                Material.IRON_SWORD, Material.SHIELD, Material.ENCHANTING_TABLE, Material.OAK_SAPLING
+//        };
+//        int[] columns = {1, 3, 5, 7};
+//
+//        for (int i = 0; i < branches.length; i++) {
+//            gui.setItem(columns[i], createItem(
+//                    branchMaterials[i],
+//                    branchName(branches[i]),
+//                    "§7Cấp Guild hiện tại: §a" + guild.getLevel()
+//            ));
+//
+//            List<GuildSkillManager.Skill> skills =
+//                    GuildSkillManager.getBranch(branches[i]);
+//
+//            for (int j = 0; j < skills.size(); j++) {
+//                int slot = (j + 1) * 9 + columns[i];
+//                gui.setItem(slot, createSkillItem(guild, skills.get(j)));
+//            }
+//        }
+//
+//        player.openInventory(gui);
+//    }
 
     private static String branchName(String branch) {
         return switch (branch) {
@@ -947,11 +947,9 @@ public class GuildGUI {
         return createItem(
                 Material.BEACON,
                 "§b§lTHÔNG TIN GUILD",
-
                 " ",
                 "§7Guild       §f" + guild.getName(),
                 "§7Chủ Guild   §e" + leaderName,
-
                 " ",
                 "§7Cấp Guild   §a" + guild.getLevel(),
                 "§7EXP         §b"
@@ -961,7 +959,10 @@ public class GuildGUI {
                 "§7Còn thiếu   §e"
                         + expRemaining
                         + " EXP",
-
+                " ",
+                "§7Cống hiến    §6"
+                        + guild.getAvailableContribution()
+                        + " điểm",
                 " ",
                 "§7Thành viên  §f"
                         + memberCount

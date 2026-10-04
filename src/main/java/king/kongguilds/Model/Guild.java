@@ -164,6 +164,25 @@ public class Guild {
         return spentContribution;
     }
 
+    public void addContribution(long amount) {
+        if (amount <= 0) return;
+
+        totalContribution += amount;
+    }
+
+    public boolean removeContribution(long amount) {
+        if (amount <= 0) return false;
+
+        long available = getAvailableContribution();
+
+        if (available < amount) {
+            return false;
+        }
+
+        totalContribution -= amount;
+        return true;
+    }
+
     public boolean spendContribution(long amount) {
         if (amount <= 0 || getAvailableContribution() < amount) return false;
         spentContribution += amount;

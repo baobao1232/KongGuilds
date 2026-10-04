@@ -5,6 +5,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 public class MessageManager {
@@ -31,5 +32,17 @@ public class MessageManager {
             msg = msg.replace("{" + entry.getKey() + "}", entry.getValue());
         }
         return msg;
+    }
+
+    public List<String> getMessageList(String group, String key) {
+
+        if (messages == null) return List.of();
+
+        List<String> lines =
+                messages.getStringList("message." + group + "." + key);
+
+        return lines.stream()
+                .map(line -> ChatColor.translateAlternateColorCodes('&', line))
+                .toList();
     }
 }
