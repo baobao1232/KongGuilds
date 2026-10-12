@@ -48,6 +48,10 @@ public class Guild {
     private transient JavaPlugin plugin;
     private String createDate; // yyyy-MM-dd
 
+    private String colorCode = "a";   // ký tự màu: a, c, 6...
+    private String iconId = null;
+    private String iconGlyph = "";
+
     public Guild(String name, UUID leader, JavaPlugin plugin) {
         this.name = name;
         this.leader = leader;
@@ -187,6 +191,25 @@ public class Guild {
         if (amount <= 0 || getAvailableContribution() < amount) return false;
         spentContribution += amount;
         return true;
+    }
+
+    public String getColorCode() {
+        return (colorCode == null || colorCode.isEmpty()) ? "a" : colorCode;
+    }
+    public void setColorCode(String colorCode) { this.colorCode = colorCode; }
+
+    public String getIconId() { return iconId; }
+    public String getIconGlyph() { return iconGlyph == null ? "" : iconGlyph; }
+
+    public void setIcon(String id, String glyph) {
+        this.iconId = id;
+        this.iconGlyph = glyph == null ? "" : glyph;
+    }
+
+    /** "<glyph> <màu><tên>" dùng cho GUI/chat */
+    public String getDisplayName() {
+        String icon = getIconGlyph();
+        return (icon.isEmpty() ? "" : icon + " ") + "§" + getColorCode() + name;
     }
 
     public void addExp(int amount) {

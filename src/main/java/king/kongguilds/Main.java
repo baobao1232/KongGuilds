@@ -4,13 +4,17 @@ import king.kongguilds.Base.BaseData;
 import king.kongguilds.Base.BaseHologramManager;
 import king.kongguilds.Command.GuildCommands;
 import king.kongguilds.Config.GuildConfig;
+import king.kongguilds.Config.GuildIconConfig;
 import king.kongguilds.License.LicenseManager;
 import king.kongguilds.Listener.BossLootListener;
+import king.kongguilds.Listener.GuildCreateListener;
 import king.kongguilds.Listener.GuildListener;
 import king.kongguilds.Listener.MythicMobDropListener;
 import king.kongguilds.Manager.*;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.TaskManager.TaskManager;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -64,12 +68,18 @@ public class Main extends JavaPlugin {
             BaseHologramManager.loadAllChestHolograms();
             startTasks();
 
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                GuildManager.update(p);
+            }
+
             getLogger().info("KongGuilds đã bật thành công!");
         });
     }
 
     @Override
     public void onDisable() {
+        GuildManager.removeAll();
+
         if (guildManager != null) {
             for (Guild guild : guildManager.getAllGuilds()) {
                 guildManager.saveGuildSync(guild.getName());
@@ -88,6 +98,7 @@ public class Main extends JavaPlugin {
 
     private void loadPluginConfig() {
         GuildConfig.load(this);
+        GuildIconConfig.load(this);
     }
 
     private boolean loadMessages() {
@@ -111,11 +122,13 @@ public class Main extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new GuildListener(this, guildManager, messageManager), this);
         getServer().getPluginManager().registerEvents(new MythicMobDropListener(), this);
         getServer().getPluginManager().registerEvents(new BossLootListener(bossLootManager), this);
+        getServer().getPluginManager().registerEvents(new GuildCreateListener(this), this);
     }
 
     private void startTasks() {
         TaskManager.startInviteCleanupTask(this, guildManager); // ✅ gọn gàng, đồng bộ
         TaskManager.startBaseHologramUpdateTask(this);          // ✅ như cũ
+        TaskManager.startGuildTagTask(this);
     }
 
     public static Main getInstance() {

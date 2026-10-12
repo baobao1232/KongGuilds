@@ -22,6 +22,7 @@ import king.kongguilds.Base.BaseHologramManager;
 import king.kongguilds.Gui.GUIHolder;
 import king.kongguilds.Gui.GUIType;
 import king.kongguilds.Gui.GuildGUI;
+import king.kongguilds.Main;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.Member;
 import king.kongguilds.Model.TimedInvite;
@@ -29,7 +30,9 @@ import king.kongguilds.WorldGuard.BaseRegionManager;
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.*;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -50,6 +53,10 @@ public class GuildManager {
     private final Set<UUID> guildChatMode = new HashSet<>();
     private static final Map<String, Hologram> hologramMap = new HashMap<>();
     private final Map<String, Map<String, List<UUID>>> itemRequests = new HashMap<>();
+    private static final Map<UUID, TextDisplay> displays = new HashMap<>();
+    private static final double HEIGHT_STAND = 2.5;
+    private static final double HEIGHT_SNEAK = 2.2;
+
     public static final int[] DONATE_SLOTS = {
             0,1,2,3,4,5,6,
             9,10,11,12,13,14,15,
@@ -87,6 +94,11 @@ public class GuildManager {
     }
 
     public CreateResult createGuild(Player leader, String rawName) {
+        return createGuild(leader, rawName, "a", null, "");
+    }
+
+    public CreateResult createGuild(Player leader, String rawName,
+                                    String colorCode, String iconId, String iconGlyph) {
         if (getPlayerGuild(leader) != null) {
             return CreateResult.ALREADY_IN_GUILD;
         }
@@ -102,9 +114,12 @@ public class GuildManager {
         }
 
         Guild guild = new Guild(name, leader.getUniqueId(), plugin);
+        guild.setColorCode(colorCode);
+        guild.setIcon(iconId, iconGlyph);
         guilds.put(name, guild);
 
         saveGuildSync(name);
+        update(leader); // hiện tag trên đầu ngay
 
         leader.sendMessage("§aTạo guild §e" + name + " §athành công!");
         return CreateResult.SUCCESS;
@@ -137,6 +152,7 @@ public class GuildManager {
             }
         }
         GuildSkillManager.remove(player);
+        remove(player);
         guild.kickMember(uuid);
         saveGuildSync(guild.getName());
 
@@ -174,6 +190,7 @@ public class GuildManager {
 
             if (member != null && member.isOnline()) {
                 GuildSkillManager.remove(member);
+                remove(member);
             }
         }
 
@@ -354,6 +371,7 @@ public class GuildManager {
 
             if (target != null && target.isOnline()) {
                 GuildSkillManager.apply(target, guild);
+                update(target);
             }
 
             if (guild.getBaseID() != null && !guild.getBaseID().isEmpty()) {
@@ -394,6 +412,7 @@ public class GuildManager {
 
         if (target != null && target.isOnline()) {
             GuildSkillManager.remove(target);
+            remove(target);
         }
 
         // Sau đó mới kick khỏi Guild
@@ -455,6 +474,7 @@ public class GuildManager {
 
         if (target != null && target.isOnline()) {
             GuildSkillManager.remove(target);
+            remove(target);
         }
 
         guild.kickMember(targetId);
@@ -610,6 +630,7 @@ public class GuildManager {
         // 3. Xử lý level up
         // 4. Giữ lại EXP dư
         guild.addExp(amount);
+        refreshGuild(guild);
 
         saveGuildSync(guild.getName());
 
@@ -1357,6 +1378,71 @@ public class GuildManager {
                     player,
                     guild
             );
+        }
+    }
+
+    // NameTag hiện Guild Name
+    private static String buildText(Guild guild) {
+        String icon = guild.getIconGlyph().isEmpty() ? "" : guild.getIconGlyph() + " ";
+        return icon + "§" + guild.getColorCode() + "§l" + guild.getName()
+                + "\n§7Level " + guild.getLevel();
+    }
+
+    private static Location tagLoc(Player p) {
+        return p.getLocation().add(0, p.isSneaking() ? HEIGHT_SNEAK : HEIGHT_STAND, 0);
+    }
+
+    /** Tạo lại tag cho player (gọi trên main thread). */
+    public static void update(Player player) {
+        remove(player);
+        if (!player.isOnline() || player.isDead()) return;
+
+        Guild guild = GuildManager.getInstance().getPlayerGuild(player);
+        if (guild == null) return;
+
+        TextDisplay td = player.getWorld().spawn(tagLoc(player), TextDisplay.class, d -> {
+            d.setText(buildText(guild));
+            d.setBillboard(Display.Billboard.CENTER);
+            d.setBackgroundColor(Color.fromARGB(0, 0, 0, 0));
+            d.setSeeThrough(false);
+            d.setShadowed(true);
+            d.setPersistent(false);      // không lưu vào world
+            d.setTeleportDuration(2);    // client nội suy khi teleport
+        });
+
+        player.hideEntity(Main.getInstance(), td); // chính chủ không thấy
+        displays.put(player.getUniqueId(), td);
+    }
+
+    /** Chỉ đổi text (khi guild lên level), không spawn lại. */
+    public static void refreshGuild(Guild guild) {
+        String text = buildText(guild);
+        for (UUID id : guild.getMembers().keySet()) {
+            TextDisplay td = displays.get(id);
+            if (td != null && td.isValid()) td.setText(text);
+        }
+    }
+
+    public static void remove(Player player) {
+        TextDisplay old = displays.remove(player.getUniqueId());
+        if (old != null && old.isValid()) old.remove();
+    }
+
+    public static void removeAll() {
+        displays.values().forEach(d -> { if (d.isValid()) d.remove(); });
+        displays.clear();
+    }
+
+    public static void tickAll() {
+        for (var entry : displays.entrySet()) {
+            Player p = Bukkit.getPlayer(entry.getKey());
+            TextDisplay td = entry.getValue();
+            if (p == null || !td.isValid()) continue;
+
+            td.teleport(tagLoc(p));
+
+            boolean hidden = p.isInvisible() || p.getGameMode() == GameMode.SPECTATOR;
+            td.setViewRange(hidden ? 0f : 1f);
         }
     }
 }

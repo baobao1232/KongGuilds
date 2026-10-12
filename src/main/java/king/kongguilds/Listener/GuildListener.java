@@ -14,11 +14,10 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -226,7 +225,7 @@ public class GuildListener implements Listener {
             ItemStack item = donate.getItem(i);
             if (item == null || item.getType() == Material.AIR) continue;
 
-            double value = ItemValueCalculator.calculateItemValue(item) * 10;
+            double value = ItemValueCalculator.calculateItemValue(item);
             if (value <= 0) continue;
 
             total += (int) (value * item.getAmount());
@@ -814,7 +813,30 @@ public class GuildListener implements Listener {
             if (guild != null) {
                 GuildSkillManager.apply(player, guild);
             }
+            GuildManager.update(player); // tag trên đầu
         });
+    }
+
+    @EventHandler
+    public void onTagQuit(PlayerQuitEvent event) {
+        GuildManager.remove(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onTagDeath(PlayerDeathEvent event) {
+        GuildManager.remove(event.getEntity());
+    }
+
+    @EventHandler
+    public void onTagRespawn(PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> GuildManager.update(player), 2L);
+    }
+
+    @EventHandler
+    public void onTagWorldChange(PlayerChangedWorldEvent event) {
+        Player player = event.getPlayer();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> GuildManager.update(player), 2L);
     }
 
     /* =========================

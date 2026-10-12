@@ -6,6 +6,9 @@ import king.kongguilds.Manager.GuildManager;
 import king.kongguilds.Model.Guild;
 import king.kongguilds.Model.TimedInvite;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Iterator;
@@ -48,4 +51,7 @@ public class TaskManager {
         }, 20L * 30, 20L * 30);
     }
 
+    public static void startGuildTagTask(JavaPlugin plugin) {
+        Bukkit.getScheduler().runTaskTimer(plugin, GuildManager::tickAll, 1L, 1L);
+    }
 }

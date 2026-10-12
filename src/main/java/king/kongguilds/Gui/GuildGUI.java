@@ -53,7 +53,7 @@ public class GuildGUI {
         Inventory gui = Bukkit.createInventory(
                 new GUIHolder(GUIType.GUILD_INFO, page),
                 36,
-                ChatColor.GREEN + "Guild: " + guild.getName()
+                ChatColor.GRAY + "Guild: " + guild.getDisplayName()
         );
 
         renderMemberList(gui, guild, page);

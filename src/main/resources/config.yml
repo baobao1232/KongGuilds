@@ -26,3 +26,14 @@ guild-skill-tree:
       material: PAPER
       model-1: 10003
       model-2: 10004
+guild-icons:
+  dragon:
+    glyph: "\uE001"
+    name: "Rồng"
+    material: PAPER
+    custom-model-data: 1001
+  sword:
+    glyph: "\uE002"
+    name: "Kiếm"
+    material: PAPER
+    custom-model-data: 1002

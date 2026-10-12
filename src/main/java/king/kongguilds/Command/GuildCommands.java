@@ -1,6 +1,8 @@
 package king.kongguilds.Command;
 
 import king.kongguilds.Base.BaseData;
+import king.kongguilds.Config.GuildIconConfig;
+import king.kongguilds.Gui.GuildCreateGUI;
 import king.kongguilds.Gui.GuildGUI;
 import king.kongguilds.Manager.GuildManager;
 import king.kongguilds.Manager.GuildSkillManager;
@@ -71,34 +73,34 @@ public class GuildCommands implements CommandExecutor {
 
         if (sub.equals("create")) {
 
-            if (args.length < 2) {
-                player.sendMessage(messageManager.getMessage("member", "create_usage"));
-                return true;
-            }
-
-            String name = String.join(
-                    " ",
-                    Arrays.copyOfRange(args, 1, args.length)
-            );
-
-            switch (guildManager.createGuild(player, name)) {
-
-                case SUCCESS:
-                    break;
-
-                case ALREADY_IN_GUILD:
-                    player.sendMessage(messageManager.getMessage("member", "already_in_guild"));
-                    break;
-
-                case NAME_EXISTS:
-                    player.sendMessage(messageManager.getMessage("member", "guild_already_exists"));
-                    break;
-
-                case INVALID_NAME:
-                    player.sendMessage(messageManager.getMessage("member", "invalid_guild_name"));
-                    break;
-            }
-
+//            if (args.length < 2) {
+//                player.sendMessage(messageManager.getMessage("member", "create_usage"));
+//                return true;
+//            }
+//
+//            String name = String.join(
+//                    " ",
+//                    Arrays.copyOfRange(args, 1, args.length)
+//            );
+//
+//            switch (guildManager.createGuild(player, name)) {
+//
+//                case SUCCESS:
+//                    break;
+//
+//                case ALREADY_IN_GUILD:
+//                    player.sendMessage(messageManager.getMessage("member", "already_in_guild"));
+//                    break;
+//
+//                case NAME_EXISTS:
+//                    player.sendMessage(messageManager.getMessage("member", "guild_already_exists"));
+//                    break;
+//
+//                case INVALID_NAME:
+//                    player.sendMessage(messageManager.getMessage("member", "invalid_guild_name"));
+//                    break;
+//            }
+            GuildCreateGUI.start(player, args.length >= 2 ? args[1] : null);
             return true;
         }
 
@@ -773,6 +775,8 @@ public class GuildCommands implements CommandExecutor {
                     GuildSkillManager.reload(
                             plugin
                     );
+                    plugin.reloadConfig();
+                    GuildIconConfig.load(plugin);
 
                     player.sendMessage(
                             "§aReload messages thành công."
